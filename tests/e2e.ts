@@ -1,7 +1,7 @@
-// End-to-end: real `opencode serve` + mock OpenAI-compatible provider + this plugin installed
-// the way install.sh does it, all under isolated temp XDG dirs.
+// End-to-end: real `opencode serve` + mock OpenAI-compatible provider + this package loaded through its
+// package.json ("plugin": [<repo>] -> main -> dist/index.js), all under isolated temp XDG dirs. Build first.
 //   bun tests/e2e.ts           (E2E_KEEP=1 keeps the temp dir for debugging)
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync, existsSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { startMock } from "./mock-openai.ts"
@@ -13,7 +13,7 @@ const CFG = join(xdg("config"), "opencode")
 const work = join(tmp, "work")
 const mockLog = join(tmp, "mock.jsonl")
 const serverLog = join(tmp, "opencode.log")
-for (const d of [join(CFG, "plugins"), work, xdg("home")]) mkdirSync(d, { recursive: true })
+for (const d of [CFG, work, xdg("home")]) mkdirSync(d, { recursive: true })
 
 const LONG = "Please write a function that reverses a linked list in place"
 const SHORT = "hi"
@@ -33,11 +33,8 @@ writeFileSync(join(CFG, "opencode.json"), JSON.stringify({
   provider: { mock: { npm: "@ai-sdk/openai-compatible", name: "Mock",
     options: { baseURL: `${mock.url.origin}/v1`, apiKey: "test-key" },
     models: { target: { name: "Target" }, small: { name: "Small" } } } },
-  model: "mock/target", small_model: "mock/small",
+  model: "mock/target", small_model: "mock/small", plugin: [REPO],
 }, null, 2))
-// same layout as install.sh
-symlinkSync(REPO, join(CFG, "plugins", "prompt-optimizer"))
-writeFileSync(join(CFG, "plugins", "prompt-optimizer.ts"), 'export { PromptOptimizerPlugin } from "./prompt-optimizer/src/index.ts"\n')
 writeCfg({ model: "mock/small", turns: 2, minChars: 5, toast: false })
 
 type Req = { path: string; auth: string | null; body: any }

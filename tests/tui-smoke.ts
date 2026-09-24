@@ -1,8 +1,9 @@
-// Visual smoke test of the real opencode TUI (isolated XDG dirs + mock provider) in tmux.
+// Visual smoke test of the real opencode TUI (isolated XDG dirs + mock provider) in tmux. The package is loaded
+// through its package.json from opencode.json + tui.json "plugin": [<repo>] (dist/, so build first).
 //   bun tests/tui-smoke.ts   1) sends a prompt (2 candidates + judge), opens /optimized
 //                           2) switches the optimizer to an 85-line reply, opens /optimized and checks that the
 //                              metadata and the last line can be reached with keys, the mouse wheel and a resize
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync, existsSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { startMock } from "./mock-openai.ts"
@@ -13,7 +14,7 @@ const CFG = join(tmp, "config", "opencode")
 const work = join(tmp, "work")
 const mockLog = join(tmp, "mock.jsonl")
 const SESSION = `po-tui-${process.pid}`
-for (const d of [join(CFG, "plugins"), work, join(tmp, "home")]) mkdirSync(d, { recursive: true })
+for (const d of [CFG, work, join(tmp, "home")]) mkdirSync(d, { recursive: true })
 
 const mock = startMock({ port: 0, log: mockLog })
 // optimizer endpoint for step 2: always replies with an 85-line optimized prompt
@@ -34,11 +35,9 @@ writeFileSync(join(CFG, "opencode.json"), JSON.stringify({
   provider: { mock: { npm: "@ai-sdk/openai-compatible", name: "Mock",
     options: { baseURL: `${mock.url.origin}/v1`, apiKey: "test-key" },
     models: { target: { name: "Target" }, small: { name: "Small" } } } },
-  model: "mock/target", small_model: "mock/small",
+  model: "mock/target", small_model: "mock/small", plugin: [REPO],
 }))
-symlinkSync(REPO, join(CFG, "plugins", "prompt-optimizer"))
-writeFileSync(join(CFG, "plugins", "prompt-optimizer.ts"), 'export { PromptOptimizerPlugin } from "./prompt-optimizer/src/index.ts"\n')
-writeFileSync(join(CFG, "tui.json"), JSON.stringify({ $schema: "https://opencode.ai/tui.json", plugin: ["./plugins/prompt-optimizer/src/tui.ts"] }))
+writeFileSync(join(CFG, "tui.json"), JSON.stringify({ $schema: "https://opencode.ai/tui.json", plugin: [REPO] }))
 const writeCfg = (o: object) => writeFileSync(join(CFG, "prompt-optimizer.jsonc"), JSON.stringify(o))
 writeCfg({ model: "mock/small", turns: 2, minChars: 5 })
 
