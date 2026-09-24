@@ -1,0 +1,57 @@
+// Prompt Optimizer for opencode. Copy to ~/.config/opencode/prompt-optimizer.jsonc
+// (or point OPENCODE_PROMPT_OPTIMIZER_CONFIG at another file).
+// Re-read on every message: edits apply without restarting opencode.
+// Any string may use {env:VAR} and {file:path} (path relative to this file; ~ allowed).
+{
+  // Master switch.
+  "enabled": true,
+
+  // Optimizer model.
+  //  - "provider/model" from your opencode config: reuses that provider's baseURL + API key.
+  //    The provider must speak the OpenAI chat-completions API (e.g. @ai-sdk/openai-compatible).
+  //  - Omit it to use opencode's "small_model".
+  "model": "cli-proxy-api/claude-sonnet-5-fast",
+
+  // Custom endpoint: any OpenAI-compatible server (…/v1). When set, "model" is sent as-is.
+  // "baseURL": "https://openrouter.ai/api/v1",
+  // "apiKey": "{env:OPENROUTER_API_KEY}",
+  // "headers": { "X-Title": "opencode-prompt-optimizer" },
+
+  // Extra fields merged into every optimizer request body.
+  // "body": { "temperature": 0.7, "max_tokens": 4096 },
+
+  // Optimization calls per message. 1 = a single rewrite.
+  // N > 1 = N calls + 1 judge call that picks the best candidate (N + 1 calls total).
+  "turns": 1,
+
+  // How the N calls run when turns > 1:
+  //  "parallel": N independent rewrites at once (fast; the judge picks the best).
+  //  "refine":   each call improves the previous one (slower; the judge picks the best version).
+  "strategy": "parallel",
+
+  // Per-request timeout in ms. On any failure your original message is sent unchanged.
+  "timeoutMs": 60000,
+
+  // Messages shorter than this (trimmed) are sent unchanged ("yes", "continue", …).
+  "minChars": 20,
+
+  // Regexes; matching messages are sent unchanged (other plugins' automated prompts, slash-like text).
+  "skipPatterns": ["<!--\\s*OMO_INTERNAL", "^\\s*\\[SYSTEM DIRECTIVE", "^/[\\w.-]+(\\s|$)"],
+
+  // Show "optimizing…" and "optimized" toasts. Failure toasts are always shown.
+  "toast": true,
+
+  // Optimizer system prompt, chosen by the TARGET model (the one opencode sends your prompt to).
+  // Keys are case-insensitive globs matched against "providerID/modelID"; first match wins,
+  // "default" otherwise. Values: inline text or {file:path}.
+  // Remove this block to use the built-in prompts/*.md shipped with the plugin.
+  "prompts": {
+    "*claude*": "{file:./plugins/prompt-optimizer/prompts/anthropic.md}",
+    "*gpt*": "{file:./plugins/prompt-optimizer/prompts/gpt.md}",
+    "*gemini*": "{file:./plugins/prompt-optimizer/prompts/gemini.md}",
+    "default": "{file:./plugins/prompt-optimizer/prompts/default.md}"
+  },
+
+  // System prompt of the judge call (only used when turns > 1).
+  "judgePrompt": "{file:./plugins/prompt-optimizer/prompts/judge.md}"
+}

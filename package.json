@@ -1,0 +1,17 @@
+{
+  "name": "opencode-prompt-optimizer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "opencode plugin: rewrites your prompt with a small model before it reaches the main model",
+  "scripts": {
+    "test": "bun test",
+    "e2e": "bun test/e2e.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "1.18.32",
+    "@types/bun": "latest",
+    "typescript": "^5.9.0"
+  }
+}
