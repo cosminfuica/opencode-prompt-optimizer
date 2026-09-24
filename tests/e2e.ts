@@ -1,6 +1,6 @@
 // End-to-end: real `opencode serve` + mock OpenAI-compatible provider + this plugin installed
 // the way install.sh does it, all under isolated temp XDG dirs.
-//   bun test/e2e.ts            (E2E_KEEP=1 keeps the temp dir for debugging)
+//   bun tests/e2e.ts           (E2E_KEEP=1 keeps the temp dir for debugging)
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync, existsSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"

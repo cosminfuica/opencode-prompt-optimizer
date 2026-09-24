@@ -1,5 +1,5 @@
 // Visual smoke test of the real opencode TUI (isolated XDG dirs + mock provider) in tmux.
-//   bun test/tui-smoke.ts   1) sends a prompt (2 candidates + judge), opens /optimized
+//   bun tests/tui-smoke.ts   1) sends a prompt (2 candidates + judge), opens /optimized
 //                           2) switches the optimizer to an 85-line reply, opens /optimized and checks that the
 //                              metadata and the last line can be reached with keys, the mouse wheel and a resize
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync, existsSync } from "node:fs"

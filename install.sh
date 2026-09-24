@@ -49,7 +49,7 @@ fi
 mkdir -p "$CFG/plugins"
 ln -sfn "$REPO" "$LINK"
 echo 'export { PromptOptimizer } from "./prompt-optimizer/src/server.ts"' >"$LOADER"
-[ -e "$CFG/prompt-optimizer.jsonc" ] || cp "$REPO/prompt-optimizer.jsonc" "$CFG/prompt-optimizer.jsonc"
+[ -e "$CFG/prompt-optimizer.jsonc" ] || cp "$REPO/examples/prompt-optimizer.jsonc" "$CFG/prompt-optimizer.jsonc"
 
 if [ ! -e "$TUI" ]; then
   printf '{\n  "$schema": "https://opencode.ai/tui.json",\n  "plugin": ["%s"]\n}\n' "$ENTRY" >"$TUI"

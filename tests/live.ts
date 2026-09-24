@@ -1,6 +1,6 @@
 // Live smoke test against YOUR opencode providers (read-only): resolves the optimizer model the way the
 // plugin does, via a running `opencode serve`, then runs one real optimization (turns=2 -> 2 rewrites + judge).
-//   opencode serve --port 4599 &   then   OC_URL=http://127.0.0.1:4599 bun test/live.ts [provider/model]
+//   opencode serve --port 4599 &   then   OC_URL=http://127.0.0.1:4599 bun tests/live.ts [provider/model]
 import { createOpencodeClient } from "@opencode-ai/sdk"
 import { loadConfig, selectPrompt } from "../src/config.ts"
 import { optimize, resolveEndpoint } from "../src/optimizer.ts"

@@ -6,7 +6,7 @@
   "description": "opencode plugin: rewrites your prompt with a small model before it reaches the main model",
   "scripts": {
     "test": "bun test",
-    "e2e": "bun test/e2e.ts",
+    "e2e": "bun tests/e2e.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

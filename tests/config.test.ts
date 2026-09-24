@@ -67,7 +67,7 @@ describe("loadConfig", () => {
     mkdirSync(promptDir, { recursive: true })
     for (const n of ["anthropic", "gpt", "gemini", "default", "judge"]) writeFileSync(join(promptDir, `${n}.md`), `ex ${n}\n`)
     const p = join(cfgDir, "prompt-optimizer.jsonc")
-    writeFileSync(p, readFileSync(join(import.meta.dir, "../prompt-optimizer.jsonc"), "utf8"))
+    writeFileSync(p, readFileSync(join(import.meta.dir, "../examples/prompt-optimizer.jsonc"), "utf8"))
     const cfg = await loadConfig(p, { builtinDir, env: {} })
     expect(cfg).toMatchObject({ enabled: true, model: "cli-proxy-api/claude-sonnet-5-fast", turns: 1, strategy: "parallel", timeoutMs: 60000, minChars: 20, toast: true })
     expect(cfg.prompts).toEqual({ "*claude*": "ex anthropic", "*gpt*": "ex gpt", "*gemini*": "ex gemini", default: "ex default" })

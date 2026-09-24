@@ -3,7 +3,7 @@
 //   judge calls (last user msg has <candidate ...>)        -> picks the LAST candidate
 //   anything else (the target chat model, titles)          -> "MOCK REPLY"
 // Every request is appended to `log` as one JSON line: {path, auth, body}.
-// CLI: bun test/mock-openai.ts [port=4010] [logfile]
+// CLI: bun tests/mock-openai.ts [port=4010] [logfile]
 import { appendFileSync } from "node:fs"
 
 const text = (c: any): string =>
