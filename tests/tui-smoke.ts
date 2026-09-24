@@ -37,7 +37,7 @@ writeFileSync(join(CFG, "opencode.json"), JSON.stringify({
   model: "mock/target", small_model: "mock/small",
 }))
 symlinkSync(REPO, join(CFG, "plugins", "prompt-optimizer"))
-writeFileSync(join(CFG, "plugins", "prompt-optimizer.ts"), 'export { PromptOptimizer } from "./prompt-optimizer/src/server.ts"\n')
+writeFileSync(join(CFG, "plugins", "prompt-optimizer.ts"), 'export { PromptOptimizerPlugin } from "./prompt-optimizer/src/index.ts"\n')
 writeFileSync(join(CFG, "tui.json"), JSON.stringify({ $schema: "https://opencode.ai/tui.json", plugin: ["./plugins/prompt-optimizer/src/tui.ts"] }))
 const writeCfg = (o: object) => writeFileSync(join(CFG, "prompt-optimizer.jsonc"), JSON.stringify(o))
 writeCfg({ model: "mock/small", turns: 2, minChars: 5 })

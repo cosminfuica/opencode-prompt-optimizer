@@ -37,7 +37,7 @@ writeFileSync(join(CFG, "opencode.json"), JSON.stringify({
 }, null, 2))
 // same layout as install.sh
 symlinkSync(REPO, join(CFG, "plugins", "prompt-optimizer"))
-writeFileSync(join(CFG, "plugins", "prompt-optimizer.ts"), 'export { PromptOptimizer } from "./prompt-optimizer/src/server.ts"\n')
+writeFileSync(join(CFG, "plugins", "prompt-optimizer.ts"), 'export { PromptOptimizerPlugin } from "./prompt-optimizer/src/index.ts"\n')
 writeCfg({ model: "mock/small", turns: 2, minChars: 5, toast: false })
 
 type Req = { path: string; auth: string | null; body: any }

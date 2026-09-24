@@ -128,4 +128,4 @@ const tui: TuiPlugin = async (api) => {
   }
 }
 
-export default { id: "prompt-optimizer", tui }
+export default { id: "@cosminfuica/opencode-prompt-optimizer", tui }

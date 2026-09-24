@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import type { Part, TextPart } from "@opencode-ai/sdk"
 import type { Config } from "../src/config.ts"
-import { createHooks, newPartID, type Deps, type HookClient } from "../src/hook.ts"
+import { createHooks, newPartID, type Deps, type HookClient, type Part, type TextPart } from "../src/hooks.ts"
 
 const LONG = "Please refactor the login handler to use async/await everywhere."
 

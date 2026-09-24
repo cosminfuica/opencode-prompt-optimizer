@@ -48,7 +48,7 @@ fi
 
 mkdir -p "$CFG/plugins"
 ln -sfn "$REPO" "$LINK"
-echo 'export { PromptOptimizer } from "./prompt-optimizer/src/server.ts"' >"$LOADER"
+echo 'export { PromptOptimizerPlugin } from "./prompt-optimizer/src/index.ts"' >"$LOADER"
 [ -e "$CFG/prompt-optimizer.jsonc" ] || cp "$REPO/examples/prompt-optimizer.jsonc" "$CFG/prompt-optimizer.jsonc"
 
 if [ ! -e "$TUI" ]; then

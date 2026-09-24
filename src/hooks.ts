@@ -1,7 +1,10 @@
 import type { Hooks } from "@opencode-ai/plugin"
-import type { Part, TextPart } from "@opencode-ai/sdk"
 import type { Config, selectPrompt } from "./config.ts"
 import type { ProviderSource, optimize, resolveEndpoint } from "./optimizer.ts"
+
+// Derived from the hook signature, so @opencode-ai/sdk isn't a dependency.
+export type Part = Parameters<NonNullable<Hooks["chat.message"]>>[1]["parts"][number]
+export type TextPart = Extract<Part, { type: "text" }>
 
 export interface HookClient {   // subset of the opencode SDK v1 client (PluginInput.client)
   session: { get(o: { path: { id: string } }): Promise<{ data?: { parentID?: string } }> }
@@ -61,7 +64,7 @@ export function createHooks(deps: Deps): Pick<Hooks, "chat.message" | "command.e
   type ToastBody = Parameters<HookClient["tui"]["showToast"]>[0]["body"]
   const toast = (body: ToastBody) => quiet(() => client.tui.showToast({ body }))
   const log = (level: "debug" | "info" | "warn" | "error", message: string, extra?: Record<string, unknown>) =>
-    quiet(() => client.app.log({ body: { service: "prompt-optimizer", level, message, extra } }))
+    quiet(() => client.app.log({ body: { service: "@cosminfuica/opencode-prompt-optimizer", level, message, extra } }))
   const warn = (e: unknown) => {
     toast({ title: "Prompt optimizer", message: `Sent your original prompt — ${errMsg(e)}`, variant: "warning", duration: 6000 })
     log("warn", `optimization skipped: ${errMsg(e)}`)

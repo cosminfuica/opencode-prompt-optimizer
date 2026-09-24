@@ -30,7 +30,7 @@ Manual install (`$CFG` = `~/.config/opencode`):
 
 ```sh
 ln -s ~/Projects/opencode-prompt-optimizer $CFG/plugins/prompt-optimizer
-echo 'export { PromptOptimizer } from "./prompt-optimizer/src/server.ts"' > $CFG/plugins/prompt-optimizer.ts
+echo 'export { PromptOptimizerPlugin } from "./prompt-optimizer/src/index.ts"' > $CFG/plugins/prompt-optimizer.ts
 cp ~/Projects/opencode-prompt-optimizer/prompt-optimizer.jsonc $CFG/
 # $CFG/tui.json: add "./plugins/prompt-optimizer/src/tui.ts" to "plugin" (this enables /optimized)
 ```
@@ -128,7 +128,7 @@ Set `"enabled": false` in `prompt-optimizer.jsonc`. It applies from the next mes
 - **"Run first" install** (for plugins that inject text into your message, such as oh-my-openagent keyword modes and
   AGENTS.md injection). By default the optimizer runs after the plugins listed in `opencode.json`, so it sees their
   injected text and keeps it verbatim. To optimize only what you typed, delete `plugins/prompt-optimizer.ts` and put
-  `"./plugins/prompt-optimizer/src/server.ts"` FIRST in the `"plugin"` array of `opencode.json`. Use one method,
+  `"./plugins/prompt-optimizer/src/index.ts"` FIRST in the `"plugin"` array of `opencode.json`. Use one method,
   never both: both would optimize twice.
 
 ## Limitations
