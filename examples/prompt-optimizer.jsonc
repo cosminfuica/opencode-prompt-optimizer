@@ -1,6 +1,8 @@
-// Prompt Optimizer for opencode. Copy to ~/.config/opencode/prompt-optimizer.jsonc
-// (or point OPENCODE_PROMPT_OPTIMIZER_CONFIG at another file).
+// Prompt Optimizer settings. Copy to ~/.config/opencode/prompt-optimizer.jsonc
+// (or point OPENCODE_PROMPT_OPTIMIZER_CONFIG at another file). Every key is optional.
 // Re-read on every message: edits apply without restarting opencode.
+// The same keys also work as plugin options in opencode.json (see opencode.json in this folder);
+// keys set here win over those.
 // Any string may use {env:VAR} and {file:path} (path relative to this file; ~ allowed).
 {
   // Master switch.
@@ -10,7 +12,7 @@
   //  - "provider/model" from your opencode config: reuses that provider's baseURL + API key.
   //    The provider must speak the OpenAI chat-completions API (e.g. @ai-sdk/openai-compatible).
   //  - Omit it to use opencode's "small_model".
-  "model": "cli-proxy-api/claude-sonnet-5-fast",
+  "model": "openai/gpt-5-mini",
 
   // Custom endpoint: any OpenAI-compatible server (…/v1). When set, "model" is sent as-is.
   // "baseURL": "https://openrouter.ai/api/v1",
@@ -39,19 +41,16 @@
   "skipPatterns": ["<!--\\s*OMO_INTERNAL", "^\\s*\\[SYSTEM DIRECTIVE", "^/[\\w.-]+(\\s|$)"],
 
   // Show "optimizing…" and "optimized" toasts. Failure toasts are always shown.
-  "toast": true,
+  "toast": true
 
   // Optimizer system prompt, chosen by the TARGET model (the one opencode sends your prompt to).
   // Keys are case-insensitive globs matched against "providerID/modelID"; first match wins,
-  // "default" otherwise. Values: inline text or {file:path}.
-  // Remove this block to use the built-in prompts/*.md shipped with the plugin.
-  "prompts": {
-    "*claude*": "{file:./plugins/prompt-optimizer/prompts/anthropic.md}",
-    "*gpt*": "{file:./plugins/prompt-optimizer/prompts/gpt.md}",
-    "*gemini*": "{file:./plugins/prompt-optimizer/prompts/gemini.md}",
-    "default": "{file:./plugins/prompt-optimizer/prompts/default.md}"
-  },
+  // "default" otherwise. Values: inline text or {file:path}. Omit to use the built-in prompts.
+  // "prompts": {
+  //   "anthropic/claude-opus-*": "{file:~/prompts/opus.md}",
+  //   "default": "Rewrite the prompt to be short and explicit. Reply inside <optimized_prompt></optimized_prompt>."
+  // },
 
-  // System prompt of the judge call (only used when turns > 1).
-  "judgePrompt": "{file:./plugins/prompt-optimizer/prompts/judge.md}"
+  // System prompt of the judge call (only used when turns > 1). Omit to use the built-in one.
+  // "judgePrompt": "{file:~/prompts/judge.md}"
 }

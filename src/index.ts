@@ -5,5 +5,5 @@ import { optimize, resolveEndpoint } from "./optimizer.ts"
 
 // Server entry (package.json "main"). Keep this the ONLY export: opencode calls every export as a plugin.
 // The /optimized TUI command lives in ./tui.ts (package.json exports["./tui"]).
-export const PromptOptimizerPlugin: Plugin = async ({ client }) =>
-  createHooks({ client, loadConfig: () => loadConfig(), selectPrompt, resolveEndpoint, optimize })
+export const PromptOptimizerPlugin: Plugin = async ({ client }, options) =>
+  createHooks({ client, loadConfig: () => loadConfig(undefined, { options }), selectPrompt, resolveEndpoint, optimize })

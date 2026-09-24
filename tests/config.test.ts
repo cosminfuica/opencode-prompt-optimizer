@@ -60,19 +60,32 @@ describe("loadConfig", () => {
     expect(cfg.prompts).toEqual({ "*x*": "X", default: "builtin default" })
   })
 
-  test("repo example prompt-optimizer.jsonc parses", async () => {
-    // mirror the install layout: $CFG/prompt-optimizer.jsonc + $CFG/plugins/prompt-optimizer/prompts/*.md
-    const cfgDir = join(tmp, "example")
-    const promptDir = join(cfgDir, "plugins/prompt-optimizer/prompts")
-    mkdirSync(promptDir, { recursive: true })
-    for (const n of ["anthropic", "gpt", "gemini", "default", "judge"]) writeFileSync(join(promptDir, `${n}.md`), `ex ${n}\n`)
-    const p = join(cfgDir, "prompt-optimizer.jsonc")
-    writeFileSync(p, readFileSync(join(import.meta.dir, "../examples/prompt-optimizer.jsonc"), "utf8"))
+  test("plugin options (opencode.json tuple) apply; the config file overrides them per key", async () => {
+    const options = { model: "p/opt", turns: 3, toast: false }
+    const only = await loadConfig(join(tmp, "nope.jsonc"), { builtinDir, env: {}, options })
+    expect(only).toMatchObject({ model: "p/opt", turns: 3, toast: false, enabled: true })
+    expect(only.path).toBeUndefined()
+    const both = await loadConfig(write(`{"turns": 2}`), { builtinDir, env: {}, options })
+    expect(both).toMatchObject({ model: "p/opt", turns: 2, toast: false })
+    await expect(loadConfig(join(tmp, "nope.jsonc"), { builtinDir, env: {}, options: { turns: 0 } }))
+      .rejects.toThrow(`prompt-optimizer config plugin options: "turns" must be an integer 1..8`)
+  })
+
+  test("repo example prompt-optimizer.jsonc parses (built-in prompts)", async () => {
+    const p = write(readFileSync(join(import.meta.dir, "../examples/prompt-optimizer.jsonc"), "utf8"))
     const cfg = await loadConfig(p, { builtinDir, env: {} })
-    expect(cfg).toMatchObject({ enabled: true, model: "cli-proxy-api/claude-sonnet-5-fast", turns: 1, strategy: "parallel", timeoutMs: 60000, minChars: 20, toast: true })
-    expect(cfg.prompts).toEqual({ "*claude*": "ex anthropic", "*gpt*": "ex gpt", "*gemini*": "ex gemini", default: "ex default" })
-    expect(cfg.judgePrompt).toBe("ex judge")
+    expect(cfg).toMatchObject({ enabled: true, model: "openai/gpt-5-mini", turns: 1, strategy: "parallel", timeoutMs: 60000, minChars: 20, toast: true })
+    expect(cfg.prompts).toEqual({ "*claude*": "builtin anthropic", "*gpt*": "builtin gpt", "*gemini*": "builtin gemini", default: "builtin default" })
+    expect(cfg.judgePrompt).toBe("builtin judge")
     expect(cfg.skipPatterns).toHaveLength(3)
+  })
+
+  test("repo example opencode.json plugin options are valid", async () => {
+    const example = JSON.parse(readFileSync(join(import.meta.dir, "../examples/opencode.json"), "utf8"))
+    const [name, options] = example.plugin[0]
+    expect(name).toBe("@cosminfuica/opencode-prompt-optimizer")
+    const cfg = await loadConfig(join(tmp, "nope.jsonc"), { builtinDir, env: {}, options })
+    expect(cfg).toMatchObject({ model: "openai/gpt-5-mini", turns: 1 })
   })
 
   test("{env:} and {file:} substitution, recursive, relative and ~", async () => {

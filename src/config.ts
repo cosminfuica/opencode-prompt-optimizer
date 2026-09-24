@@ -12,7 +12,10 @@ export interface Config {
   judgePrompt: string               // resolved text
   path?: string                     // file used; undefined => defaults
 }
-export interface LoadOptions { builtinDir?: string; env?: Record<string, string | undefined> }
+export interface LoadOptions {
+  builtinDir?: string; env?: Record<string, string | undefined>
+  options?: Record<string, unknown>  // from opencode.json `["<package>", { … }]`; the config file overrides them per key
+}
 type Env = Record<string, string | undefined>
 
 const DEFAULT_SKIP = ["<!--\\s*OMO_INTERNAL", "^\\s*\\[SYSTEM DIRECTIVE", "^/[\\w.-]+(\\s|$)"]
@@ -29,22 +32,25 @@ export function configPath(env: Env = process.env): string {
 export async function loadConfig(path?: string, opts: LoadOptions = {}): Promise<Config> {
   const env = opts.env ?? process.env
   const file = path ?? configPath(env)
-  const fail = (what: string): never => { throw new Error(`prompt-optimizer config ${file}: ${what}`) }
+  const exists = existsSync(file)
+  const hasOptions = isObject(opts.options) && Object.keys(opts.options).length > 0
+  const where = !hasOptions ? file : exists ? `${file} + plugin options` : "plugin options"
+  const fail = (what: string): never => { throw new Error(`prompt-optimizer config ${where}: ${what}`) }
   const builtinDir = opts.builtinDir ?? fileURLToPath(new URL("../prompts/", import.meta.url))
   const builtin = (name: string) => {
     try { return readFileSync(join(builtinDir, name), "utf8").trim() }
     catch { return fail(`cannot read built-in prompt ${join(builtinDir, name)}`) }
   }
 
-  let raw: Record<string, unknown> = {}
-  const exists = existsSync(file)
+  // plugin options arrive already {env:}/{file:}-substituted by opencode
+  let raw: Record<string, unknown> = isObject(opts.options) ? { ...opts.options } : {}
   if (exists) {
     let parsed: unknown
     try { parsed = Bun.JSONC.parse(readFileSync(file, "utf8")) }
     catch (e) { fail(`invalid JSONC (${(e as Error).message})`) }
     if (!isObject(parsed)) fail("top level must be an object")
     const home = env.HOME || homedir()
-    raw = substitute(parsed, env, dirname(resolve(file)), home, fail) as Record<string, unknown>
+    raw = { ...raw, ...(substitute(parsed, env, dirname(resolve(file)), home, fail) as Record<string, unknown>) }
   }
 
   const bool = (k: string, d: boolean) => {
