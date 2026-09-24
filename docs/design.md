@@ -1,8 +1,6 @@
-# opencode-prompt-optimizer — design contract
+# opencode-prompt-optimizer — design
 
-Status: v1 contract. Every module owner codes against THIS file. Do not change an
-interface here without the integrator's approval; if you must deviate, say so in
-your final report.
+How the plugin works, and the contracts between its modules. The README covers installation and usage.
 
 ## Goal
 
@@ -87,61 +85,56 @@ interface PromptOptimizerMeta {
 }
 ```
 
-## Repo layout and ownership
+## Repo layout
 
 ```
-~/Projects/opencode-prompt-optimizer/
-  DESIGN.md                this file (integrator)
-  package.json tsconfig.json   (integrator) bun test / tsc --noEmit
-  prompt-optimizer.jsonc   example config (integrator)
-  src/config.ts            (A) config loading/validation/prompt selection
-  src/optimizer.ts         (B) endpoint resolution, HTTP calls, turns + judge
-  src/hook.ts              (C) createHooks(deps): the chat.message logic
-  src/server.ts            (C) thin plugin entry (exports ONLY the plugin fn)
-  src/tui.ts               (D) TUI plugin: /optimized dialog
-  prompts/{default,anthropic,gpt,gemini,judge}.md   (F) prompt library
-  test/mock-openai.ts      shared mock server (integrator; do not edit)
-  test/config.test.ts      (A)   test/optimizer.test.ts (B)
-  test/hook.test.ts        (C)   test/tui.test.ts (D, optional)
-  test/e2e.ts              (E) real opencode binary + mock provider
-  README.md install.sh     (E)
+src/index.ts             server entry: exports ONLY the plugin function (package.json main, exports["./server"])
+src/tui.ts               TUI entry: default-exports { id, tui }, the /optimized dialog (exports["./tui"])
+src/hooks.ts             createHooks(deps): chat.message, command.execute.before, messages.transform
+src/config.ts            config loading/validation/prompt selection
+src/optimizer.ts         endpoint resolution, HTTP calls, turns + judge
+prompts/*.md             built-in optimizer and judge system prompts (shipped, read at runtime)
+tests/*.test.ts          unit tests (bun test)
+tests/mock-openai.ts     shared OpenAI-compatible mock server
+tests/e2e.ts             real `opencode serve` + mock provider
+tests/tui-smoke.ts       real opencode TUI in tmux
+tests/live.ts            one real optimization against your own providers
+examples/                opencode.json, tui.json, prompt-optimizer.jsonc
 ```
-Only edit files you own. Runtime: Bun (opencode 1.18.32 embeds Bun 1.3.14; the
-system has bun 1.4.2). Use ESM TypeScript with `.ts` extensions in relative imports.
-Use no runtime dependencies. Only `import type` from `@opencode-ai/plugin` / `@opencode-ai/sdk`.
+Runtime: Bun (opencode 1.18.32 embeds it). ESM TypeScript, compiled by `tsc` to `dist/`
+(`.ts` import specifiers are rewritten to `.js`). No runtime dependencies. Only `import type`
+from `@opencode-ai/plugin`, which is therefore an optional peer dependency.
 
-## Install layout (used by install.sh and e2e)
+## Packaging and loading
 
-```
-$CFG = ${XDG_CONFIG_HOME:-~/.config}/opencode
-$CFG/plugins/prompt-optimizer/            -> symlink to the repo (or a copy)
-$CFG/plugins/prompt-optimizer.ts          loader, auto-loaded by opencode:
-    export { PromptOptimizer } from "./prompt-optimizer/src/server.ts"
-$CFG/prompt-optimizer.jsonc               user config (copied from the example if absent)
-$CFG/tui.json  "plugin": [..., "./plugins/prompt-optimizer/src/tui.ts"]
-```
-opencode auto-loads only top-level `plugins/*.{ts,js}`. That is why the helpers
-live in a subdirectory. Every export of a server plugin module must be a plugin
-function, so server.ts exports only `PromptOptimizer`.
+- npm: `"plugin": ["@cosminfuica/opencode-prompt-optimizer"]` in `opencode.json` loads the
+  server half via `exports["./server"]` (falling back to `main`). `tui.json` needs the same
+  entry for the TUI half: opencode reads TUI plugins only from `tui.json`, and only via
+  `exports["./tui"]`. `opencode plugin <name>` adds both entries.
+- opencode installs npm plugins with scripts disabled, so `dist/` is built at pack time
+  (`prepack`) and shipped with `prompts/` (see `files`).
+- Local checkout: `"plugin": ["/abs/path/to/repo"]` resolves through the same `package.json`.
+- A server plugin module must export nothing but plugin functions: opencode calls every
+  export. A TUI module must default-export `{ id, tui }` and must not also export `server`.
 
 Load order matters for plugins that inject text into the user's message, such as
 oh-my-openagent's keyword modes and AGENTS.md injection. Their `chat.message`
-hooks edit the user's text part in place.
-- Default install (the loader in `plugins/`) runs AFTER the plugins listed in
-  opencode.json. The optimizer then sees their injected text and is told to keep
-  it verbatim.
-- "Run first" install: delete the loader and put
-  `"./plugins/prompt-optimizer/src/server.ts"` FIRST in opencode.json `"plugin"`.
-  The optimizer then sees only what the user typed. The transform's
+hooks edit the user's text part in place. Hooks run in `plugin` array order.
+- Listed after them, the optimizer sees their injected text and is told to keep it verbatim.
+- Listed before them, the optimizer sees only what the user typed. The transform's
   replace-in-place step keeps other plugins' injections around the optimized text.
-  Use one method or the other, never both: both would double-optimize.
 
-## Config file (A)
+## Config (src/config.ts)
 
 Path: `$OPENCODE_PROMPT_OPTIMIZER_CONFIG`, else `$CFG/prompt-optimizer.jsonc`,
 else `$CFG/prompt-optimizer.json`. If no file exists, use defaults. The format is
 JSONC (comments + trailing commas), parsed with `Bun.JSONC.parse`. The file is
 re-read on every message, so edits apply live.
+
+The same keys can be given as plugin options in opencode.json
+(`["@cosminfuica/opencode-prompt-optimizer", { … }]`, the plugin function's second
+argument). They are the base; top-level keys in the file replace them (shallow merge).
+Both go through the same validation.
 
 | key | type | default | notes |
 |---|---|---|---|
@@ -173,7 +166,8 @@ Keys are tried in insertion order (`"default"` excluded) and the first match win
 Then comes `prompts.default`, then the built-in default.md. When the file has no
 `prompts` key, the built-ins are:
 `{"*claude*": anthropic.md, "*gpt*": gpt.md, "*gemini*": gemini.md, "default": default.md}`.
-They are read from `<repo>/prompts/` (resolved via `import.meta.url`).
+They are read from the package's `prompts/` (resolved via `import.meta.url`, so
+`dist/config.js` finds `../prompts/`).
 
 ```ts
 // src/config.ts
@@ -186,7 +180,7 @@ export interface Config {
   judgePrompt: string               // resolved text
   path?: string                     // file used; undefined => defaults
 }
-export interface LoadOptions { builtinDir?: string; env?: Record<string, string | undefined> }
+export interface LoadOptions { builtinDir?: string; env?: Record<string, string | undefined>; options?: Record<string, unknown> }
 export function configPath(env?: Record<string, string | undefined>): string
 export async function loadConfig(path?: string, opts?: LoadOptions): Promise<Config>
   // missing file => defaults. Invalid JSONC / invalid values / unreadable {file:} =>
@@ -195,7 +189,7 @@ export function selectPrompt(cfg: Config, target: string): string
 export function globMatch(pattern: string, s: string): boolean
 ```
 
-## Optimizer core (B)
+## Optimizer core (src/optimizer.ts)
 
 ```ts
 // src/optimizer.ts
@@ -304,15 +298,17 @@ buildJudgeMessage:
 {c2}
 </candidate>
 ```
-Output contracts that the prompt files (F) must instruct:
+Output contracts that the prompt files must instruct:
 - The optimizer replies with the rewrite inside `<optimized_prompt>…</optimized_prompt>`.
 - The judge replies with an optional `<reason>…</reason>`, then `<best>k</best>`.
 
-## Hook wiring (C)
+## Hooks (src/hooks.ts)
 
 ```ts
-// src/hook.ts
+// src/hooks.ts
 import type { Hooks } from "@opencode-ai/plugin"
+export type Part = Parameters<NonNullable<Hooks["chat.message"]>>[1]["parts"][number]
+export type TextPart = Extract<Part, { type: "text" }>
 export interface HookClient {   // subset of the opencode SDK v1 client (PluginInput.client)
   session: { get(o: { path: { id: string } }): Promise<{ data?: { parentID?: string } }> }
   tui: { showToast(o: { body: { title?: string; message: string; variant: "info" | "success" | "warning" | "error"; duration?: number } }): Promise<unknown> }
@@ -330,12 +326,12 @@ export function createHooks(deps: Deps): Pick<Hooks, "chat.message" | "command.e
 export function newPartID(): string
 ```
 ```ts
-// src/server.ts: the ONLY export is the plugin function
+// src/index.ts: the ONLY export is the plugin function
 import type { Plugin } from "@opencode-ai/plugin"
-export const PromptOptimizer: Plugin = async ({ client }) =>
-  createHooks({ client, loadConfig: () => loadConfig(), selectPrompt, resolveEndpoint, optimize })
+export const PromptOptimizerPlugin: Plugin = async ({ client }, options) =>
+  createHooks({ client, loadConfig: () => loadConfig(undefined, { options }), selectPrompt, resolveEndpoint, optimize })
 ```
-hook.ts must use only `import type` from config.ts/optimizer.ts. Every runtime
+hooks.ts must use only `import type` from config.ts/optimizer.ts. Every runtime
 function arrives through `deps`, so hook tests need no other module.
 chat.message steps, in order. Wrap everything in try/catch. Never throw.
 1. If `command.execute.before` marked this sessionID: clear the mark and skip.
@@ -362,7 +358,7 @@ chat.message steps, in order. Wrap everything in try/catch. Never throw.
 9. On any error in 6–8: parts stay untouched. Warning toast (always shown): title
    "Prompt optimizer", message `Sent your original prompt — <error.message>`,
    duration 6000. Log at warn level.
-Logging goes through `client.app.log` with service "prompt-optimizer". Never log apiKey.
+Logging goes through `client.app.log` with service "@cosminfuica/opencode-prompt-optimizer". Never log apiKey.
 Toast/log failures are swallowed.
 
 `command.execute.before({sessionID})`: record `sessionID` in a Set of pending
@@ -372,17 +368,14 @@ templates; optimizing them would be surprising.
 `experimental.chat.messages.transform`: exactly as described in "How it works".
 It is synchronous-safe and cheap, and must never throw (wrap it in try/catch).
 
-## TUI display (D)
+## TUI display (src/tui.ts)
 
 `src/tui.ts`: plain TypeScript, NO JSX. It has
-`export default { id: "prompt-optimizer", tui }`, with types from
-`@opencode-ai/plugin/tui` (TuiPlugin / TuiPluginApi; see
-`node_modules/@opencode-ai/plugin/dist/tui.d.ts`). Build UI from `api.ui.*`
-components. If raw elements are needed (e.g. a sidebar slot), do what the installed
-oh-my-openagent TUI plugin does: `const solid = await import("@opentui/solid")`,
-then `solid.createElement("box"|"text")`, `solid.setProp`, and `solid.insert`.
-Reference: `~/.cache/opencode/packages/oh-my-openagent@latest/node_modules/oh-my-openagent/dist/tui.js`
-lines 81830-81958.
+`export default { id: "@cosminfuica/opencode-prompt-optimizer", tui }`, with types from
+`@opencode-ai/plugin/tui` (TuiPlugin / TuiPluginApi). Build UI from `api.ui.*`
+components. Raw elements come from `@opentui/solid`, which opencode provides to TUI
+plugins at runtime: `const solid = await import("@opentui/solid")`, then
+`solid.createElement("box"|"text")`, `solid.setProp`, and `solid.insert`.
 - It registers the palette command "Show optimized prompt" as slash `/optimized`,
   category "Prompt Optimizer". Preferred:
   `api.keymap.registerLayer({ commands: [{ name: "prompt-optimizer.show", title, category, namespace: "palette", slashName: "optimized", run() {…} }] })`.
@@ -402,11 +395,12 @@ lines 81830-81958.
 
 ## Tests
 
-- `bun test` runs the `test/*.test.ts` unit tests. They must not touch the network
-  or real user config. Use `test/mock-openai.ts` (`startMock({ port: 0, log, fail })`)
+- `bun test` runs the `tests/*.test.ts` unit tests. They must not touch the network
+  or real user config. Use `tests/mock-openai.ts` (`startMock({ port: 0, log, fail })`)
   for HTTP.
-- `bun test/e2e.ts` runs the real `opencode serve` with isolated XDG_CONFIG_HOME,
-  XDG_DATA_HOME, and XDG_STATE_HOME temp dirs. It configures a mock OpenAI-compatible
-  provider and asserts the full flow (see the E task).
+- `bun run e2e` builds, then runs the real `opencode serve` with isolated XDG_CONFIG_HOME,
+  XDG_DATA_HOME, and XDG_STATE_HOME temp dirs, loading the package through `package.json`.
+  It configures a mock OpenAI-compatible provider and asserts the full flow.
+- `bun run tui-smoke` does the same for the TUI half, in tmux.
 - Never modify `~/.config/opencode` or `~/.local/share/opencode` in tests. Never kill
-  opencode processes you didn't start: the user runs opencode on this machine.
+  opencode processes you didn't start.

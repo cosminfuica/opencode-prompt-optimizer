@@ -14,28 +14,25 @@ An opencode plugin that rewrites your prompt with a small model before the main 
 
 ## Install
 
-Requirements: opencode ≥ 1.18, and an optimizer model reachable through an OpenAI-compatible `/chat/completions` API.
+Requirements: opencode ≥ 1.18 (tested on 1.18.32), and an optimizer model reachable through an OpenAI-compatible
+`/chat/completions` API.
 
-```sh
-git clone <this repo> ~/Projects/opencode-prompt-optimizer
-~/Projects/opencode-prompt-optimizer/install.sh          # re-run any time; it is idempotent
-$EDITOR ~/.config/opencode/prompt-optimizer.jsonc         # set "model"
-# restart opencode
+Add the package to `plugin` in `opencode.json` (global `~/.config/opencode/opencode.json` or a project's) and in the
+`tui.json` next to it. opencode installs it from npm on the next start. The `tui.json` entry adds `/optimized`.
+
+```jsonc
+// opencode.json
+{ "plugin": ["@cosminfuica/opencode-prompt-optimizer"] }
+// tui.json
+{ "plugin": ["@cosminfuica/opencode-prompt-optimizer"] }
 ```
 
-`install.sh --uninstall` removes the symlink, the loader and the `tui.json` entry. It keeps your
-`prompt-optimizer.jsonc`. Set `XDG_CONFIG_HOME` or `CFG_DIR` to use a different config dir.
+Or let opencode edit both files: `opencode plugin @cosminfuica/opencode-prompt-optimizer -g` (drop `-g` for the
+current project only). Then set the optimizer `model` (see below) and restart opencode.
 
-Manual install (`$CFG` = `~/.config/opencode`):
-
-```sh
-ln -s ~/Projects/opencode-prompt-optimizer $CFG/plugins/prompt-optimizer
-echo 'export { PromptOptimizerPlugin } from "./prompt-optimizer/src/index.ts"' > $CFG/plugins/prompt-optimizer.ts
-cp ~/Projects/opencode-prompt-optimizer/prompt-optimizer.jsonc $CFG/
-# $CFG/tui.json: add "./plugins/prompt-optimizer/src/tui.ts" to "plugin" (this enables /optimized)
-```
-
-opencode auto-loads only top-level `plugins/*.ts`. That's why the repo lives in a subdirectory with a one-line loader.
+opencode reuses its cached copy of an unpinned plugin. To update, pin a version
+(`"@cosminfuica/opencode-prompt-optimizer@0.2.0"`) or delete
+`~/.cache/opencode/packages/@cosminfuica/opencode-prompt-optimizer@latest`.
 
 ## Configuration
 
@@ -43,6 +40,15 @@ The config file is `~/.config/opencode/prompt-optimizer.jsonc` (or `.json`, or t
 `$OPENCODE_PROMPT_OPTIMIZER_CONFIG`). It's JSONC: comments and trailing commas are allowed. **It is re-read on every
 message, so edits apply without a restart.** Without a file, the defaults below apply. Every string supports
 `{env:VAR}` and `{file:path}`, where the path is relative to the config file and `~/` means your home dir.
+
+The same keys also work as plugin options in `opencode.json` (read at startup). A top-level key in the file replaces
+the same option:
+
+```jsonc
+{ "plugin": [["@cosminfuica/opencode-prompt-optimizer", { "model": "openai/gpt-5-mini", "turns": 2 }]] }
+```
+
+[`examples/`](examples/) has a commented `prompt-optimizer.jsonc` plus `opencode.json` and `tui.json`.
 
 | key | default | meaning |
 |---|---|---|
@@ -88,14 +94,14 @@ Google, OpenRouter, Groq, Mistral, DeepSeek, xAI. Anything else needs a custom e
 
 Keys are case-insensitive globs (`*`, `?`) matched against the target `"providerID/modelID"`. They're tried in order
 and the first match wins. `default` is the fallback. If you leave out `prompts`, the built-ins apply: `*claude*`,
-`*gpt*`, `*gemini*` and `default`, from `prompts/*.md`.
+`*gpt*`, `*gemini*` and `default`, from the package's `prompts/*.md`. Without a `default` key, the built-in default
+is used.
 
 ```jsonc
 "prompts": {
   "anthropic/claude-opus-*": "{file:~/prompts/opus.md}",
-  "*claude*": "{file:./plugins/prompt-optimizer/prompts/anthropic.md}",
   "ollama/*": "Rewrite the prompt to be short and explicit. Reply inside <optimized_prompt></optimized_prompt>.",
-  "default": "{file:./plugins/prompt-optimizer/prompts/default.md}"
+  "default": "{file:~/prompts/default.md}"
 }
 ```
 
@@ -123,13 +129,12 @@ Set `"enabled": false` in `prompt-optimizer.jsonc`. It applies from the next mes
   `<optimized_prompt>` block.
 - **OAuth / subscription providers** (logins without an API key) can't be the optimizer. Use an API-key provider or
   a custom `baseURL`.
-- **Plugin not loading**: check that `~/.config/opencode/plugins/prompt-optimizer.ts` exists and the symlink resolves.
-  `/optimized` also needs the `tui.json` entry.
-- **"Run first" install** (for plugins that inject text into your message, such as oh-my-openagent keyword modes and
-  AGENTS.md injection). By default the optimizer runs after the plugins listed in `opencode.json`, so it sees their
-  injected text and keeps it verbatim. To optimize only what you typed, delete `plugins/prompt-optimizer.ts` and put
-  `"./plugins/prompt-optimizer/src/index.ts"` FIRST in the `"plugin"` array of `opencode.json`. Use one method,
-  never both: both would optimize twice.
+- **Plugin not loading**: run `opencode --print-logs --log-level INFO` and look for `failed to load plugin`.
+  `opencode debug config` shows the resolved `plugin` list. `/optimized` also needs the `tui.json` entry.
+- **Plugin order** (for plugins that inject text into your message, such as oh-my-openagent keyword modes and
+  AGENTS.md injection). Plugins run in `plugin` array order. Listed after them (where `opencode plugin` puts it), the
+  optimizer sees their injected text and keeps it verbatim. Listed first, it optimizes only what you typed, and their
+  injections are kept around the optimized text.
 
 ## Limitations
 
@@ -143,12 +148,17 @@ Set `"enabled": false` in `prompt-optimizer.jsonc`. It applies from the next mes
 
 ```sh
 bun install
-bun test            # unit tests (no network, no real config)
-bun test/e2e.ts     # real `opencode serve` + mock provider in temp XDG dirs (E2E_KEEP=1 keeps them)
-bun test/tui-smoke.ts   # real opencode TUI in tmux: sends prompts, checks /optimized incl. scrolling an 85-line prompt
-OC_URL=http://127.0.0.1:4599 bun test/live.ts [provider/model]   # one real optimization via a running `opencode serve`
-bunx tsc --noEmit
+bun test                 # unit tests (no network, no real config)
+bun run typecheck
+bun run build            # tsc -> dist/
+bun run e2e              # build, then real `opencode serve` + mock provider in temp XDG dirs (E2E_KEEP=1 keeps them)
+bun run tui-smoke        # build, then the real opencode TUI in tmux: /optimized incl. scrolling an 85-line prompt
+npm pack --dry-run       # what would be published
+OC_URL=http://127.0.0.1:4599 bun tests/live.ts <provider/model>   # one real optimization via a running `opencode serve`
 ```
+
+To run a local checkout in opencode, build it and put its absolute path in `plugin` in both `opencode.json` and
+`tui.json`: `"plugin": ["/path/to/opencode-prompt-optimizer"]`. opencode loads `dist/` through `package.json`.
 
 The e2e test reuses your opencode package cache (`~/.cache/opencode`) so it runs offline. Set `E2E_FRESH_CACHE=1` to
 isolate the cache too. The first run then downloads packages.
