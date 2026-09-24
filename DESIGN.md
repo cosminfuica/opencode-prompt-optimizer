@@ -255,13 +255,15 @@ chat: POST `${baseURL without trailing /}/chat/completions` with the JSON
 `{ model, messages, stream: false, ...body }` and the headers
 `Content-Type: application/json`, `Authorization: Bearer <apiKey>` (only if apiKey), and `...headers`.
 Use `AbortSignal.timeout(timeoutMs)`. A non-2xx response throws an Error with the
-status and a snippet of the body. Content is `choices[0].message.content` (a string,
+status and a snippet of the body. `choices[0].finish_reason === "length"` throws: the
+reply was cut off, so the message says to raise `max_tokens`. Content is `choices[0].message.content` (a string,
 or an array of `{text}` pieces). Strip `<think>…</think>` blocks and trim. Empty
 content throws.
 
 optimize:
 - The candidate call uses `[system: input.system, user: buildOptimizerMessage(prompt, target, previous?)]`.
-  The candidate is `extractTag(reply, "optimized_prompt") ?? reply`, trimmed.
+  The candidate is the last non-empty `<optimized_prompt>` block (`extractTag`). If there is none,
+  the call fails like any other error. The raw reply is never used as the prompt.
 - turns = 1 makes one call.
 - strategy "parallel", turns = N: run N independent calls in parallel
   (`Promise.allSettled`, no `previous`) and keep the successes in input order.
@@ -388,9 +390,14 @@ lines 81830-81958.
 - run(): the session comes from `api.route.current` (`name === "session"`, `params.sessionID`).
   Walk `api.state.session.messages(sessionID)` newest-first. For each user message,
   `api.state.part(message.id)` gives its parts; find a text part with
-  `metadata?.promptOptimizer`. If found:
-  `api.ui.dialog.replace(() => api.ui.DialogAlert({ title: "Optimized prompt · <optimizerModel>", message: part.text }))`
-  (make it large if possible). Otherwise show a toast: "No optimized prompt in this session yet".
+  `metadata?.promptOptimizer`. If found, open a large dialog with `api.ui.dialog.replace`. It has the title
+  `"Optimized prompt · <optimizerModel>"`, then the metadata line (target, turns, `candidate k/N by judge`, ms),
+  then `part.text` in a `scrollbox`, then a key hint. These are raw `@opentui/solid` elements; the dialog height
+  is capped to fit the terminal. While the dialog is open, a priority-1 `api.keymap.registerLayer` layer scrolls
+  it: ↑↓/j/k, PgUp/PgDn, Home/End. Enter closes it. The layer is removed in the dialog's `onClose`. The mouse
+  wheel scrolls natively. DialogAlert can't scroll and cuts off tall text, and opencode's session keys make PgDn
+  close it. If `@opentui/solid` is unavailable, fall back to `api.ui.DialogAlert` with the metadata first,
+  so it is never the part that gets cut off. Otherwise show a toast: "No optimized prompt in this session yet".
 - Visual only. Nothing is sent to the model.
 
 ## Tests

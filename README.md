@@ -8,7 +8,7 @@ An opencode plugin that rewrites your prompt with a small model before the main 
 - **The model sees only the optimized prompt.** It goes into a hidden (`synthetic`) part of your message, and a
   transform hook swaps it in for your text on every model request.
 - **You can see what was sent.** A toast shows a preview, and `/optimized` (also in the command palette) opens the
-  full text of the latest optimized prompt in this session.
+  full text of the latest optimized prompt in this session. Scroll it with ↑↓, PgUp/PgDn, Home/End or the mouse wheel.
 - **Failures fall back to your original.** On any error or timeout your original prompt is sent and a warning toast
   shows why.
 
@@ -100,7 +100,8 @@ and the first match wins. `default` is the fallback. If you leave out `prompts`,
 ```
 
 Custom prompts must tell the model to reply inside `<optimized_prompt>…</optimized_prompt>`. Judge prompts must reply
-with `<best>k</best>`. Without the tag, the whole reply is used as the prompt.
+with `<best>k</best>`. A rewrite that has no non-empty `<optimized_prompt>` block, or that was cut off by `max_tokens`,
+is discarded. If no rewrite is left, your original prompt is sent and a warning toast says why.
 
 ### Multiple turns
 
@@ -118,7 +119,8 @@ Set `"enabled": false` in `prompt-optimizer.jsonc`. It applies from the next mes
 - **Logs**: `~/.local/share/opencode/log/*.log` (or run `opencode --print-logs`). To find entries:
   `grep prompt-optimizer ~/.local/share/opencode/log/*.log`. Skips and failures are logged at WARN.
 - **"Sent your original prompt — …" toast**: the optimizer failed. The message says why: model not found, no
-  baseURL, HTTP status, or timeout.
+  baseURL, HTTP status, timeout, a reply cut off at `max_tokens` (raise it in `body`), or a reply without an
+  `<optimized_prompt>` block.
 - **OAuth / subscription providers** (logins without an API key) can't be the optimizer. Use an API-key provider or
   a custom `baseURL`.
 - **Plugin not loading**: check that `~/.config/opencode/plugins/prompt-optimizer.ts` exists and the symlink resolves.
@@ -143,7 +145,7 @@ Set `"enabled": false` in `prompt-optimizer.jsonc`. It applies from the next mes
 bun install
 bun test            # unit tests (no network, no real config)
 bun test/e2e.ts     # real `opencode serve` + mock provider in temp XDG dirs (E2E_KEEP=1 keeps them)
-bun test/tui-smoke.ts   # real opencode TUI in tmux: sends a prompt, opens /optimized, prints screens
+bun test/tui-smoke.ts   # real opencode TUI in tmux: sends prompts, checks /optimized incl. scrolling an 85-line prompt
 OC_URL=http://127.0.0.1:4599 bun test/live.ts [provider/model]   # one real optimization via a running `opencode serve`
 bunx tsc --noEmit
 ```

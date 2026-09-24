@@ -33,9 +33,12 @@ function fixed(content: unknown, sleepMs = 0) {
 const user = (content: string) => [{ role: "user" as const, content }]
 
 describe("extractTag", () => {
-  test("inner text, trimmed, last occurrence, undefined when absent", () => {
+  test("inner text, trimmed, last non-empty occurrence, undefined when absent or empty", () => {
     expect(extractTag("x <a>\n hi \n</a> y", "a")).toBe("hi")
     expect(extractTag("<a>format</a> ... <a>real</a>", "a")).toBe("real")
+    expect(extractTag("<a>real</a> echo: <a></a> <a> \n </a>", "a")).toBe("real")
+    expect(extractTag("<a>\n</a>", "a")).toBeUndefined()
+    expect(extractTag("<a>cut off", "a")).toBeUndefined()
     expect(extractTag("<A>no</A>", "a")).toBeUndefined()
   })
 })
@@ -180,6 +183,52 @@ describe("optimize", () => {
       expect(await optimize({ ...base, endpoint: e, turns: 2 })).toMatchObject({ chosen: 1, judged: true })
       expect(await optimize({ ...base, endpoint: { ...e, model: "oob" }, turns: 2 })).toMatchObject({ chosen: 0, judged: false })
     } finally { s.stop(true) }
+  })
+
+  describe("malformed replies never become the prompt", () => {
+    const GOOD = "<optimized_prompt>\nFix the slow login page.\n</optimized_prompt>"
+    const replies: Record<string, [content: string, finish_reason?: string]> = {
+      refusal: ["I'm sorry, but I can't help with that request."],
+      empty: ["<optimized_prompt>\n</optimized_prompt>"],
+      echo: [`${GOOD}\nAs requested I used <optimized_prompt></optimized_prompt>.`],
+      truncated: ["Let me think. Keep the log verbatim.\n<optimized_prompt>\nThe login page is slow. Log:\nERR db tim", "length"],
+    }
+    let got: any[] = []
+    const s = Bun.serve({
+      port: 0, hostname: "127.0.0.1",
+      async fetch(req) {
+        const b: any = await req.json()
+        got.push(b)
+        // "mixed": the first call to arrive gets a refusal, the others a good block
+        const [content, finish_reason = "stop"] = b.model === "mixed" ? (got.length === 1 ? replies.refusal! : [GOOD]) : replies[b.model]!
+        return Response.json({ choices: [{ index: 0, message: { role: "assistant", content }, finish_reason }] })
+      },
+    })
+    afterAll(() => s.stop(true))
+    beforeEach(() => { got = [] })
+    const run = (model: string, turns = 1) => optimize({ ...base, endpoint: { baseURL: s.url.href, model }, turns })
+
+    test("no tags (refusal) => throws", async () => {
+      await expect(run("refusal")).rejects.toThrow(`no text inside <optimized_prompt> tags (reply: "I'm sorry, but I can't help`)
+    })
+
+    test("empty block => throws", async () => {
+      await expect(run("empty")).rejects.toThrow("no text inside <optimized_prompt> tags")
+    })
+
+    test("good block, then an echoed empty block => the good block", async () => {
+      expect(await run("echo")).toMatchObject({ prompt: "Fix the slow login page.", candidates: ["Fix the slow login page."] })
+    })
+
+    test("cut off at max_tokens (finish_reason length) => throws, suggests max_tokens", async () => {
+      await expect(run("truncated")).rejects.toThrow(`cut off at the token limit; raise "max_tokens"`)
+    })
+
+    test("parallel turns=2, one malformed + one good => good one used, no judge call", async () => {
+      expect(await run("mixed", 2)).toMatchObject({ prompt: "Fix the slow login page.", candidates: ["Fix the slow login page."], chosen: 0, judged: false })
+      expect(got.length).toBe(2)
+      expect(got.some(isJudge)).toBe(false)
+    })
   })
 })
 

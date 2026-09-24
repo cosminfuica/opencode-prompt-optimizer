@@ -82,7 +82,10 @@ export async function chat(
     throw new Error(`optimizer endpoint returned HTTP ${res.status}: ${text.slice(0, 200)}`)
   }
   const data: any = await res.json()
-  const c = data?.choices?.[0]?.message?.content
+  const choice = data?.choices?.[0]
+  if (choice?.finish_reason === "length")
+    throw new Error(`optimizer reply was cut off at the token limit; raise "max_tokens" under "body" in prompt-optimizer.jsonc`)
+  const c = choice?.message?.content
   const raw = typeof c === "string" ? c : Array.isArray(c) ? c.map((p: any) => p?.text ?? "").join("") : ""
   const content = raw.replace(/<think>[\s\S]*?<\/think>/g, "").trim()
   if (!content) throw new Error("optimizer model returned empty content")
@@ -90,9 +93,9 @@ export async function chat(
 }
 
 export function extractTag(text: string, tag: string): string | undefined {
-  // last occurrence wins: models sometimes echo the format instructions first
-  const all = [...text.matchAll(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, "g"))]
-  return all.at(-1)?.[1]?.trim()
+  // last non-empty occurrence wins: models sometimes echo the format instructions or an empty tag pair
+  const all = [...text.matchAll(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, "g"))].map((m) => m[1]!.trim()).filter(Boolean)
+  return all.at(-1)
 }
 
 const head = (prompt: string, target: string) =>
@@ -123,7 +126,13 @@ export async function optimize(input: OptimizeInput): Promise<OptimizeResult> {
       { role: "system", content: input.system },
       { role: "user", content: buildOptimizerMessage(input.prompt, input.target, previous) },
     ], opts)
-    return (extractTag(reply, "optimized_prompt") ?? reply).trim()
+    // never fall back to the raw reply: a refusal or chatter would replace the user's prompt
+    const prompt = extractTag(reply, "optimized_prompt")
+    if (!prompt) {
+      const r = reply.replace(/\s+/g, " ")
+      throw new Error(`optimizer reply has no text inside <optimized_prompt> tags (reply: "${r.length > 100 ? r.slice(0, 100) + "…" : r}")`)
+    }
+    return prompt
   }
 
   const turns = Math.max(1, input.turns)
