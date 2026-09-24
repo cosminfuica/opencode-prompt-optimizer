@@ -1,17 +1,68 @@
 {
-  "name": "opencode-prompt-optimizer",
+  "name": "@cosminfuica/opencode-prompt-optimizer",
   "version": "0.1.0",
-  "private": true,
+  "description": "OpenCode plugin that rewrites your prompt with a small model before the main model sees it",
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "prompt",
+    "prompt-optimization",
+    "llm",
+    "ai"
+  ],
+  "homepage": "https://github.com/cosminfuica/opencode-prompt-optimizer#readme",
+  "bugs": {
+    "url": "https://github.com/cosminfuica/opencode-prompt-optimizer/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cosminfuica/opencode-prompt-optimizer.git"
+  },
+  "license": "MIT",
   "type": "module",
-  "description": "opencode plugin: rewrites your prompt with a small model before it reaches the main model",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./tui": {
+      "types": "./dist/tui.d.ts",
+      "import": "./dist/tui.js"
+    }
+  },
+  "files": [
+    "dist",
+    "prompts"
+  ],
   "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
+    "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "e2e": "bun tests/e2e.ts",
-    "typecheck": "tsc --noEmit"
+    "e2e": "bun run build && bun tests/e2e.ts",
+    "tui-smoke": "bun run build && bun tests/tui-smoke.ts"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": "^1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@opencode-ai/plugin": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@opencode-ai/plugin": "1.18.32",
-    "@types/bun": "latest",
-    "typescript": "^5.9.0"
+    "@opencode-ai/sdk": "1.18.32",
+    "@types/bun": "1.4.2",
+    "typescript": "5.9.3"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
