@@ -6,11 +6,13 @@ import tui from "../src/tui.ts"
 const read = (p: string) => readFileSync(new URL(p, import.meta.url), "utf8")
 const pkg = JSON.parse(read("../package.json"))
 
-// opencode calls every export of the server entry as a plugin: an exported helper or constant breaks loading
-test("server entry exports only the plugin, and it resolves to a hooks object", async () => {
-  expect(Object.keys(server)).toEqual(["PromptOptimizerPlugin"])
-  const hooks = await server.PromptOptimizerPlugin({ client: {} } as any)
-  expect(Object.keys(hooks).sort()).toEqual(["chat.message", "command.execute.before", "experimental.chat.messages.transform"])
+test("server entry supports OpenCode v1's named plugin and v2's default module", async () => {
+  expect(Object.keys(server).sort()).toEqual(["PromptOptimizerPlugin", "default"])
+  expect(server.default).toEqual({ id: pkg.name, server: server.PromptOptimizerPlugin })
+  for (const plugin of [server.PromptOptimizerPlugin, server.default.server]) {
+    const hooks = await plugin({ client: {} } as any)
+    expect(Object.keys(hooks).sort()).toEqual(["chat.message", "command.execute.before", "experimental.chat.messages.transform"])
+  }
 })
 
 test("tui entry default-exports only { id, tui }, id = package name", () => {

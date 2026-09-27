@@ -85,27 +85,39 @@ leave an already-clear prompt essentially unchanged, and never do the task thems
 
 ## Quick start
 
-**1. Install it.** Let OpenCode add the plugin to both `opencode.json` and `tui.json`:
+**1. Install it.** This package supports OpenCode v1 and v2. Let your version add the plugin:
 
 ```sh
-# drop -g to install for the current project only
+# OpenCode v1; drop -g to install for the current project only
 opencode plugin @cosminfuica/opencode-prompt-optimizer -g
+
+# OpenCode v2
+opencode plugin add @cosminfuica/opencode-prompt-optimizer
 ```
 
 <details>
 <summary>Or edit the config files yourself</summary>
 
 Add the plugin to `opencode.json`, either the global `~/.config/opencode/opencode.json` or the one in your project.
-OpenCode installs it from npm the next time it starts.
+OpenCode installs it from npm the next time it starts. Use `plugin` in v1 and `plugins` in v2:
 
 ```json
+// OpenCode v1
 {
   "plugin": ["@cosminfuica/opencode-prompt-optimizer"]
 }
 ```
 
-Then add the same entry to the `tui.json` next to it (`~/.config/opencode/tui.json` for the global setup). That entry
-adds the `/optimized` command.
+```json
+// OpenCode v2
+{
+  "plugins": ["@cosminfuica/opencode-prompt-optimizer"]
+}
+```
+
+In v1, add the same entry to the `tui.json` next to it (`~/.config/opencode/tui.json` for the global setup). That entry
+adds the `/optimized` command. V2 loads the package's TUI entry from the `plugins` setting, so no separate `tui.json`
+entry is needed.
 
 </details>
 
@@ -122,7 +134,7 @@ A `"provider/model"` from your OpenCode config reuses that provider's key. Local
 **3. Chat as usual.** For each message, a toast shows `Optimizing with <model>…`, then `✨ Prompt optimized` previews
 the result. The model gets the rewrite. Your chat shows what you typed. Set `"toast": false` to hide these two toasts.
 
-**Requirements:** OpenCode (tested with 1.18.32), and an optimizer model reachable through an OpenAI-compatible
+**Requirements:** OpenCode v1.18.32+ or v2, and an optimizer model reachable through an OpenAI-compatible
 `/chat/completions` API. OAuth and subscription logins, which have no API key, can't be used as the optimizer.
 
 ### See what was sent
