@@ -121,7 +121,8 @@ entry is needed.
 
 </details>
 
-**2. Pick an optimizer model.** The plugin uses your OpenCode `small_model`. If you haven't set one, choose a model in
+**2. Model selection.** On **v2.0.18**, no optimizer configuration is needed: it uses the current session's selected
+model and variant for an isolated generation request. On **v1.18.32**, it uses `small_model`. To choose a separate optimizer, set a model in
 `~/.config/opencode/prompt-optimizer.jsonc`:
 
 ```jsonc
@@ -131,11 +132,31 @@ entry is needed.
 A `"provider/model"` from your OpenCode config reuses that provider's key. Local and custom endpoints work too, see
 [Choosing the optimizer model](#choosing-the-optimizer-model).
 
-**3. Chat as usual.** For each message, a toast shows `Optimizing with <model>…`, then `✨ Prompt optimized` previews
-the result. The model gets the rewrite. Your chat shows what you typed. Set `"toast": false` to hide these two toasts.
+**3. Chat as usual.** A toast previews each successful rewrite. The model gets the rewrite; your chat shows what you
+typed. Set `"toast": false` to hide success notifications. V2 also supports `/optimize <request>` to optimize and send.
 
-**Requirements:** OpenCode v1.18.32+ or v2, and an optimizer model reachable through an OpenAI-compatible
-`/chat/completions` API. OAuth and subscription logins, which have no API key, can't be used as the optimizer.
+**Supported APIs:** OpenCode v1.18.32 and v2.0.18. V1 and explicit `baseURL` overrides require an OpenAI-compatible
+`/chat/completions` endpoint. V2 uses OpenCode's standalone generation API and globally configured provider credentials.
+Authentication plugins that require session hooks are not supported by that API; use an explicit `baseURL` in that case.
+
+### Install a development checkout globally
+
+Before this change is released to npm, use the fork's built installation branch:
+
+```sh
+git clone --branch installable-v2 https://github.com/sRaH/opencode-prompt-optimizer.git "$HOME/.config/opencode/plugins/opencode-prompt-optimizer"
+```
+
+Add the **absolute checkout path** to `plugins` in `~/.config/opencode/opencode.json`, preserving existing entries:
+
+```json
+{ "plugins": ["/absolute/path/to/.config/opencode/plugins/opencode-prompt-optimizer"] }
+```
+
+Run `opencode reload` and restart the TUI. Root `server.js` and `tui.js` files enable local discovery.
+Update with `git -C "$HOME/.config/opencode/plugins/opencode-prompt-optimizer" pull --ff-only`.
+For a source checkout without committed `dist`, run `bun install` and `npm run build` first.
+The registry command above installs the published version, which may not yet include these changes.
 
 ### See what was sent
 
@@ -146,7 +167,7 @@ judge picked it.
 
 To scroll, use <kbd>↑</kbd>/<kbd>↓</kbd> or <kbd>j</kbd>/<kbd>k</kbd> for a line, <kbd>PgUp</kbd>/<kbd>PgDn</kbd> for
 a page, <kbd>Home</kbd>/<kbd>End</kbd> for the top or bottom, or the mouse wheel. <kbd>Enter</kbd> or <kbd>Esc</kbd>
-closes the dialog. The command needs the `tui.json` entry from [Quick start](#quick-start).
+closes the dialog. On v1, the command needs the `tui.json` entry from [Quick start](#quick-start).
 
 ## How it works
 
@@ -165,7 +186,7 @@ flowchart TD
     class model target
 ```
 
-The rewrite is stored as a hidden (`synthetic`) part of your message, so the chat keeps your words. Before every model
+The rewrite is stored in a hidden (`synthetic`) part on v1, or message metadata on v2, so the chat keeps your words. Before every model
 request, a transform hook swaps the rewrite in for your text, so earlier messages stay optimized too. An optimized
 message waits for one optimizer round trip, or N + 1 calls with `turns` > 1, before the main model starts.
 
@@ -174,7 +195,7 @@ message waits for one optimizer round trip, or N + 1 calls with `turns` > 1, bef
 These messages go to the model unchanged, with no toast:
 
 - messages shorter than `minChars` (20 characters by default), such as "yes" or "continue"
-- slash commands
+- slash-command text (v1 also skips rendered command templates); v2 `/optimize` deliberately submits an ordinary request
 - messages in subagent (task) sessions
 - messages that match `skipPatterns`, which by default cover other plugins' automated prompts and text that starts
   like a slash command
@@ -189,7 +210,7 @@ restart.
 
 The package has two halves, and OpenCode loads both through `package.json`.
 
-**Server plugin** (`dist/index.js`, from `main` and `exports["./server"]`), loaded from `opencode.json`:
+**V1 server** (`dist/index.js` through `main`, also available through `dist/server.js`), loaded from `opencode.json`:
 
 - `chat.message` runs when you send a message. Unless the message is skipped, it resolves the optimizer endpoint and
   runs the rewrite calls, plus the judge call when there are several candidates. Then it appends the result to your
@@ -199,17 +220,25 @@ The package has two halves, and OpenCode loads both through `package.json`.
   swaps the optimized text in for your words. Earlier messages stay optimized too.
 - `command.execute.before` marks slash-command runs so their rendered templates aren't optimized.
 
-**TUI plugin** (`dist/tui.js`, from `exports["./tui"]`), loaded from `tui.json`: it registers `/optimized`, which reads
+**V2 server** (`dist/server.js`, also exposed by root `server.js` for local discovery) registers `prompt`
+and `context` hooks. It generates candidates through standalone requests using the selected model, without a session
+ID, conversation history, tools or agent instructions. Results live in message metadata; only the model request copy
+is rewritten. `/optimize` submits a request once.
+
+**TUI plugin** (`dist/tui.js`, from `exports["./tui"]`, or root `tui.js` for local discovery) supports both host APIs.
+It registers `/optimized`, which reads
 that metadata from the session and shows it. It only displays the prompt. Nothing is sent to the model.
 
 Each hook catches its own errors, so a failure never blocks your message. Your original prompt goes through instead.
-If the transform hook ever stops running (for example after an OpenCode API change), the model gets both your original
-and the optimized text. That's degraded, not broken.
+If v2's context hook stops running, the model receives the original text.
 
 ```text
 .
 ├── src/
-│   ├── index.ts        server entry: exports only PromptOptimizerPlugin
+│   ├── index.ts        legacy v1 server entry
+│   ├── server.ts       dual server module: v1 server and v2 setup
+│   ├── v2.ts           native v2 session hooks and /optimize
+│   ├── tui-v2.ts       native v2 /optimized preview and notifications
 │   ├── hooks.ts        chat.message, command.execute.before, messages.transform
 │   ├── optimizer.ts    endpoint resolution, HTTP calls, turns + judge
 │   ├── config.ts       config loading, validation, prompt selection
@@ -223,13 +252,13 @@ and the optimized text. That's degraded, not broken.
 └── package.json        main, exports["./server"] and exports["./tui"] point into dist/
 ```
 
-The published package contains only `dist/` and `prompts/`, plus this README, the license and `package.json`.
+The published package contains `dist/`, `prompts/`, root discovery shims, this README, the license and `package.json`.
 
 </details>
 
 ## Configuration
 
-Every setting is optional. Most people only set `model`. There are two places to put settings:
+Every setting is optional. V2 needs none by default. There are two places to put settings:
 
 1. **The config file** at `~/.config/opencode/prompt-optimizer.jsonc` (`$XDG_CONFIG_HOME` is respected, and
    `prompt-optimizer.json` works too). Set `$OPENCODE_PROMPT_OPTIMIZER_CONFIG` to use another path. The file is
@@ -251,17 +280,17 @@ Both accept the same keys and use the same validation. If both set a key, the co
 | Key | Default | Description |
 |---|---|---|
 | `enabled` | `true` | Master switch. |
-| `model` | OpenCode's `small_model` | The optimizer model: `"provider/model"` from your OpenCode config, or the raw model name when `baseURL` is set. |
+| `model` | v1: `small_model`; v2: session model | Optional `"provider/model"` override, or raw model name when `baseURL` is set. |
 | `baseURL` | none | A custom OpenAI-compatible endpoint (`…/v1`). Requires `model`. |
 | `apiKey` | none | API key for `baseURL`, ignored without it. OpenCode's provider keys are never sent to a custom `baseURL`. |
-| `headers` | `{}` | Extra HTTP headers for optimizer requests. |
-| `body` | `{}` | Extra request-body fields for every call, e.g. `temperature`, `max_tokens`, `reasoning_effort`. |
+| `headers` | `{}` | Extra HTTP headers for v1 or explicit `baseURL`. Native v2 uses provider settings. |
+| `body` | `{}` | HTTP body fields for v1/`baseURL`. Native v2 standalone generation does not expose request-body overrides. |
 | `turns` | `1` | Rewrite calls per message, 1 to 8. With N > 1, one more judge call picks the best: N + 1 calls in total. |
 | `strategy` | `"parallel"` | How the N calls run: `"parallel"` makes N independent rewrites at once, `"refine"` makes them one after another, each improving the previous one. |
 | `timeoutMs` | `60000` | Timeout for each request, in milliseconds (at least 1000). |
 | `minChars` | `20` | Messages shorter than this, after trimming, are sent unchanged. |
 | `skipPatterns` | see below | Regexes. A message that matches any of them is sent unchanged. |
-| `toast` | `true` | Show the "Optimizing…" and "Prompt optimized" toasts. Failure toasts always show. |
+| `toast` | `true` | Show success notifications (and v1's "Optimizing…" toast). Failure toasts always show. |
 | `prompts` | built-ins | Optimizer system prompts, chosen by the **target** model. See [Prompts per target model](#prompts-per-target-model). |
 | `judgePrompt` | `prompts/judge.md` | System prompt for the judge call. |
 
@@ -279,13 +308,19 @@ The default `skipPatterns` skip other plugins' automated prompts and text that s
 
 ### Choosing the optimizer model
 
+On v2, omit `model` to use the current session's selected model in an independent request. Changing the session model
+also changes the optimizer on the next message. Providers are resolved from global configuration, without session
+authentication hooks. Subscription/OAuth plugins that require those hooks need an explicit endpoint override.
+A timeout releases your prompt, but native generation exposes no cancellation;
+an already-running provider request may finish in the background.
+
 A `"provider/model"` from your OpenCode config reuses that provider's base URL, API key and headers:
 
 ```jsonc
 { "model": "openai/gpt-5-mini" }
 ```
 
-This works for providers with an OpenAI-compatible chat API: `@ai-sdk/openai-compatible` providers with a `baseURL`,
+On v1 this works for providers with an OpenAI-compatible chat API: `@ai-sdk/openai-compatible` providers with a `baseURL`,
 OpenAI, Anthropic, Google, OpenRouter, Groq, Mistral, DeepSeek and xAI. For anything else, set a custom endpoint:
 
 ```jsonc
@@ -456,6 +491,8 @@ More checks:
 
 ```sh
 bun run e2e          # build, then real `opencode serve` + a mock provider in temp XDG dirs (E2E_KEEP=1 keeps them)
+bun tests/v2-e2e.ts  # after build: isolated real v2.0.18 server + local mock; keeps evidence in temp dirs
+V2_TUI=1 bun tests/v2-e2e.ts # also checks /optimized in the real v2 TUI (requires tmux)
 bun run tui-smoke    # build, then the real OpenCode TUI in tmux: /optimized, including scrolling a long prompt
 npm pack --dry-run   # list what would be published
 OC_URL=http://127.0.0.1:4599 bun tests/live.ts <provider/model>   # one real optimization via `opencode serve --port 4599`
@@ -466,7 +503,7 @@ to isolate the cache too. The first run then downloads packages.
 
 ### Load your local copy in OpenCode
 
-Build, then put the absolute path of your checkout in `plugin` in both `opencode.json` and `tui.json`, instead of the
+On v1, build, then put the absolute path of your checkout in `plugin` in both `opencode.json` and `tui.json`, instead of the
 npm name:
 
 ```json
@@ -475,7 +512,7 @@ npm name:
 }
 ```
 
-OpenCode loads the checkout through its `package.json`, so it runs `dist/`. After a change, run `bun run build` and
+On v2, use `plugins` in `opencode.json`; the root discovery shims load `dist/`. After a change, run `bun run build` and
 restart OpenCode.
 
 ## Contributing
@@ -485,10 +522,8 @@ Issues and pull requests are welcome on
 
 - Run `bun test` and `bun run typecheck`. For changes to the hooks or the TUI, also run `bun run e2e` and
   `bun run tui-smoke`.
-- Keep `src/index.ts` exporting only the plugin function, because OpenCode calls every export of the entry as a
-  plugin.
-- Import from `@opencode-ai/*` with `import type` only. It's an optional peer dependency, so OpenCode doesn't install
-  it next to the plugin. `tests/index.test.ts` checks this rule and the one above.
+- Preserve the v1 function/module entries and native v2 setup entries.
+- Import host SDKs with `import type` only, so runtime loading does not require their packages alongside the plugin.
 - Hooks must never throw. On failure, the original prompt goes through.
 - See [`docs/design.md`](docs/design.md) for the contracts between the modules.
 

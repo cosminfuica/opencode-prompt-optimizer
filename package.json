@@ -28,8 +28,8 @@
       "import": "./dist/index.js"
     },
     "./server": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
     },
     "./tui": {
       "types": "./dist/tui.d.ts",
@@ -38,7 +38,9 @@
   },
   "files": [
     "dist",
-    "prompts"
+    "prompts",
+    "server.js",
+    "tui.js"
   ],
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
@@ -59,6 +61,7 @@
   "devDependencies": {
     "@opencode-ai/plugin": "1.18.32",
     "@opencode-ai/sdk": "1.18.32",
+    "@opencode/plugin": "2.0.18",
     "@types/bun": "1.4.2",
     "typescript": "5.9.3"
   },

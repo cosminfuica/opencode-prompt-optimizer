@@ -119,13 +119,24 @@ export interface OptimizeInput {
 export interface OptimizeResult { prompt: string; candidates: string[]; chosen: number; judged: boolean; ms: number }
 
 export async function optimize(input: OptimizeInput): Promise<OptimizeResult> {
+  return optimizeWith(input, (messages) => chat(input.endpoint, messages, {
+    timeoutMs: input.timeoutMs, body: input.body,
+  }))
+}
+
+export type OptimizerMessages = { role: "system" | "user"; content: string }[]
+
+// Both OpenCode generations share candidate validation, refinement and judging.
+export async function optimizeWith(
+  input: Omit<OptimizeInput, "endpoint">,
+  request: (messages: OptimizerMessages) => Promise<string>,
+): Promise<OptimizeResult> {
   const start = Date.now()
-  const opts = { timeoutMs: input.timeoutMs, body: input.body }
   const candidate = async (previous?: string) => {
-    const reply = await chat(input.endpoint, [
+    const reply = await request([
       { role: "system", content: input.system },
       { role: "user", content: buildOptimizerMessage(input.prompt, input.target, previous) },
-    ], opts)
+    ])
     // never fall back to the raw reply: a refusal or chatter would replace the user's prompt
     const prompt = extractTag(reply, "optimized_prompt")
     if (!prompt) {
@@ -158,10 +169,10 @@ export async function optimize(input: OptimizeInput): Promise<OptimizeResult> {
 
   const fallback = input.strategy === "refine" ? candidates.length - 1 : 0
   try {
-    const reply = await chat(input.endpoint, [
+    const reply = await request([
       { role: "system", content: input.judgeSystem },
       { role: "user", content: buildJudgeMessage(input.prompt, input.target, candidates) },
-    ], opts)
+    ])
     const k = Number(extractTag(reply, "best")?.match(/\d+/)?.[0] ?? reply.match(/\d+/)?.[0])
     if (Number.isInteger(k) && k >= 1 && k <= candidates.length) return done(k - 1, true)
   } catch {

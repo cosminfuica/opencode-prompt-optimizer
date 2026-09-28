@@ -2,21 +2,24 @@ import { expect, test } from "bun:test"
 import { readdirSync, readFileSync } from "node:fs"
 import * as server from "../src/index.ts"
 import tui from "../src/tui.ts"
+import dualServer from "../src/server.ts"
 
 const read = (p: string) => readFileSync(new URL(p, import.meta.url), "utf8")
 const pkg = JSON.parse(read("../package.json"))
 
-test("server entry supports OpenCode v1's named plugin and v2's default module", async () => {
+test("legacy entry and dual server preserve v1 hooks and expose native v2 setup", async () => {
   expect(Object.keys(server).sort()).toEqual(["PromptOptimizerPlugin", "default"])
   expect(server.default).toEqual({ id: pkg.name, server: server.PromptOptimizerPlugin })
+  expect(dualServer.server).toBe(server.PromptOptimizerPlugin)
+  expect(typeof dualServer.setup).toBe("function")
   for (const plugin of [server.PromptOptimizerPlugin, server.default.server]) {
     const hooks = await plugin({ client: {} } as any)
     expect(Object.keys(hooks).sort()).toEqual(["chat.message", "command.execute.before", "experimental.chat.messages.transform"])
   }
 })
 
-test("tui entry default-exports only { id, tui }, id = package name", () => {
-  expect(Object.keys(tui).sort()).toEqual(["id", "tui"])
+test("tui entry supports both host APIs with one stable id", () => {
+  expect(Object.keys(tui).sort()).toEqual(["id", "setup", "tui"])
   expect(tui.id).toBe(pkg.name)
 })
 

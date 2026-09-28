@@ -1,4 +1,5 @@
 import type { TuiPlugin, TuiPluginApi } from "@opencode-ai/plugin/tui"
+import { setup } from "./tui-v2.ts"
 
 const NAME = "prompt-optimizer.show"
 const TITLE = "Show optimized prompt"
@@ -128,4 +129,4 @@ const tui: TuiPlugin = async (api) => {
   }
 }
 
-export default { id: "@cosminfuica/opencode-prompt-optimizer", tui }
+export default { id: "@cosminfuica/opencode-prompt-optimizer", tui, setup }

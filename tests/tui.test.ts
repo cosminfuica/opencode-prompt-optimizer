@@ -56,6 +56,38 @@ test("registers /optimized and shows newest optimized part, metadata first", asy
   expect(log.disposed).toBe(1)
 })
 
+async function testV2Tui() {
+  const layers: any[] = [], dialogs: any[] = [], toasts: any[] = []
+  let listener: any, synced = 0, disposed = 0
+  const current = { version: 2, original: "original", prompt: "Full optimized text", optimizerModel: "test/selected", target: "test/selected",
+    turns: 2, candidates: ["first", "Full optimized text"], chosen: 1, judged: true, ms: 42, toast: true }
+  const ctx: any = {
+    ui: {
+      router: { current: () => ({ type: "session", sessionID: "ses_test" }) },
+      slot: (slot: any) => { slot.render(); return () => disposed++ },
+      dialog: { show: (fn: any) => dialogs.push(fn()), set: () => {}, clear: () => {} },
+      toast: { show: (value: any) => toasts.push(value) },
+    },
+    keymap: { layer: (fn: any) => layers.push(fn()) },
+    data: {
+      session: { message: { sync: async () => { synced++ }, list: () => [{ type: "user", metadata: { promptOptimizer: current } }] } },
+      on: (_type: string, fn: any) => { listener = fn; return () => disposed++ },
+    },
+  }
+  const cleanup = await plugin.setup(ctx)
+  expect(layers[0].commands[0].slash.name).toBe("optimized")
+  await layers[0].commands[0].run()
+  expect(synced).toBe(1)
+  expect(JSON.stringify(dialogs[0])).toContain("Full optimized text")
+  expect(JSON.stringify(dialogs[0])).toContain("selected 2 by judge")
+  listener({ data: { item: { type: "user", payload: { metadata: { promptOptimizer: current } } } } })
+  expect(toasts[0].variant).toBe("success")
+  listener({ data: { item: { type: "user", payload: { metadata: { promptOptimizerError: "timeout" } } } } })
+  expect(toasts[1].message).toContain("Sent original prompt")
+  if (cleanup) await cleanup()
+  expect(disposed).toBe(2)
+}
+
 test("toast when no optimized prompt", async () => {
   const { api, log } = fake(session)
   api.state.part = () => []
@@ -120,3 +152,5 @@ test("scrollable dialog: metadata on top, prompt in a scrollbox, keys scroll it,
   key("return") // closes the dialog, which removes the key layer
   expect(log.disposed).toBe(1)
 })
+
+test("v2 /optimized registers, syncs metadata, opens preview and reports results", testV2Tui)
