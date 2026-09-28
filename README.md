@@ -153,8 +153,12 @@ Add the **absolute checkout path** to `plugins` in `~/.config/opencode/opencode.
 { "plugins": ["/absolute/path/to/.config/opencode/plugins/opencode-prompt-optimizer"] }
 ```
 
-Run `opencode reload` and restart the TUI. Root `server.js` and `tui.js` files enable local discovery.
+Run `opencode service restart` and restart the TUI. Root `server.js` and `tui.js` files enable local discovery.
 Update with `git -C "$HOME/.config/opencode/plugins/opencode-prompt-optimizer" pull --ff-only`.
+After updating, restart the service again: `opencode reload` can retain the previous plugin module in memory.
+Standalone or externally managed servers must be restarted through their own launcher.
+If an older version submitted optimizer instructions into a conversation, start a new session; updating the plugin
+does not remove those instructions from existing chat history.
 For a source checkout without committed `dist`, run `bun install` and `npm run build` first.
 The registry command above installs the published version, which may not yet include these changes.
 
