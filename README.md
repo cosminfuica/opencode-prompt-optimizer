@@ -85,8 +85,8 @@ leave an already-clear prompt essentially unchanged, and never do the task thems
 
 ## Quick start
 
-**1. Install it.** The package isn't on npm yet, so install from a local build. `opencode plugin` adds the absolute
-path to both `opencode.json` and `tui.json`:
+**1. Install it.** Build it from a clone of this repo. `opencode plugin` adds the checkout's absolute path to both
+`opencode.json` and `tui.json`:
 
 ```sh
 git clone https://github.com/cosminfuica/opencode-prompt-optimizer.git
@@ -110,10 +110,6 @@ Put the absolute path of your checkout in `plugin` in `opencode.json`, either th
 
 Then add the same entry to the `tui.json` next to it (`~/.config/opencode/tui.json` for the global setup). That entry
 adds the `/optimized` command.
-
-Once `@cosminfuica/opencode-prompt-optimizer` is published on npm, `opencode plugin @cosminfuica/opencode-prompt-optimizer -g`
-and the npm name in both files will work too. The unscoped `opencode-prompt-optimizer` package on npm is a different
-project.
 
 </details>
 
@@ -183,7 +179,7 @@ To pause the optimizer, set `"enabled": false` in `prompt-optimizer.jsonc`. It a
 restart, and it also silences warnings about invalid values in other settings.
 
 <details>
-<summary><b>Under the hood</b>: hooks, files and what gets published</summary>
+<summary><b>Under the hood</b>: hooks and files</summary>
 
 <br>
 
@@ -220,11 +216,9 @@ the model that writes the title sees both your first message and its rewrite. Th
 ├── examples/           opencode.json, tui.json, prompt-optimizer.jsonc
 ├── assets/             logo and README images
 ├── docs/design.md      the full design and module contracts
-├── dist/               compiled output (built by tsc, published, not committed)
+├── dist/               compiled output (built by tsc, not committed)
 └── package.json        main, exports["./server"] and exports["./tui"] point into dist/
 ```
-
-The published package contains only `dist/` and `prompts/`, plus this README, the license and `package.json`.
 
 </details>
 
@@ -237,7 +231,7 @@ Every setting is optional. Most people only set `model`. There are two places to
    JSONC, so comments and trailing commas are allowed. It's re-read on every message, so edits apply without a
    restart.
 2. **Plugin options** in `opencode.json`, read when OpenCode starts. The first element is the same `plugin` entry you
-   installed (your checkout's path until the package is on npm):
+   installed, your checkout's path:
 
    ```json
    {
@@ -248,8 +242,8 @@ Every setting is optional. Most people only set `model`. There are two places to
    ```
 
 Both accept the same keys and use the same validation. If both set a key, the config file wins for that top-level key.
-[`examples/`](examples/) has a fully commented `prompt-optimizer.jsonc`, plus `opencode.json` and `tui.json`; those two
-use the npm name, so swap in your checkout's path until the package is published.
+[`examples/`](examples/) has a fully commented `prompt-optimizer.jsonc`, plus `opencode.json` and `tui.json`; in those
+two, replace the placeholder path with your checkout's path.
 
 | Key | Default | Description |
 |---|---|---|
@@ -437,13 +431,10 @@ Set `"enabled": false` in `prompt-optimizer.jsonc`. It applies from the next mes
   reasoning models, in `body`), a reply with no `<optimized_prompt>` block, or an invalid config.
 - **Plugin not loading:** `opencode debug config` shows the resolved `plugin` list. OpenCode doesn't log every plugin
   that fails to load, so check for the plugin's own activity instead: send a message of 20+ characters and look for an
-  `Optimizing with …` toast or a `prompt-optimizer:` log line. If there is none and you load a local checkout, check
-  that the path in `plugin` exists and that you ran `bun run build` (OpenCode loads `dist/`).
+  `Optimizing with …` toast or a `prompt-optimizer:` log line. If there is none, check that the path in `plugin`
+  exists and that you ran `bun run build` (OpenCode loads `dist/`).
 - **No `/optimized` command:** add the plugin to `tui.json` as well.
-- **Updating:** for a local checkout, run `git pull && bun run build` and restart OpenCode. Once the package is on
-  npm: OpenCode keeps using its cached copy of an unpinned plugin. To update, pin a version
-  (`"@cosminfuica/opencode-prompt-optimizer@0.1.0"`) or delete
-  `~/.cache/opencode/packages/@cosminfuica/opencode-prompt-optimizer@latest`, then restart OpenCode.
+- **Updating:** run `git pull && bun run build` in your checkout and restart OpenCode.
 - **Plugin order:** plugins run in the order of the `plugin` array. Some plugins edit the text of your message, for
   example keyword modes or AGENTS.md injection. If the optimizer is listed after them, it sees their text and is told
   to keep it verbatim. If it's listed before them, it optimizes only what you typed, and their text stays around the
@@ -468,7 +459,6 @@ More checks:
 ```sh
 bun run e2e          # build, then real `opencode serve` + a mock provider in temp XDG dirs (E2E_KEEP=1 keeps them)
 bun run tui-smoke    # build, then the real OpenCode TUI in tmux: /optimized, including scrolling a long prompt
-npm pack --dry-run   # list what would be published
 OC_URL=http://127.0.0.1:4599 bun tests/live.ts <provider/model>   # one real optimization via `opencode serve --port 4599`
 ```
 
@@ -482,17 +472,8 @@ CI runs both suites against the OpenCode version that matches the `@opencode-ai/
 
 ### Load your local copy in OpenCode
 
-Build, then put the absolute path of your checkout in `plugin` in both `opencode.json` and `tui.json`, instead of the
-npm name:
-
-```json
-{
-  "plugin": ["/absolute/path/to/opencode-prompt-optimizer"]
-}
-```
-
-OpenCode loads the checkout through its `package.json`, so it runs `dist/`. After a change, run `bun run build` and
-restart OpenCode.
+Install your checkout as in [Quick start](#quick-start). OpenCode loads it through its `package.json`, so it runs
+`dist/`. After a change, run `bun run build` and restart OpenCode.
 
 ## Contributing
 

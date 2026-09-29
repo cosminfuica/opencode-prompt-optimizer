@@ -95,7 +95,7 @@ describe("loadConfig", () => {
   test("repo example opencode.json plugin options are valid", async () => {
     const example = JSON.parse(readFileSync(join(import.meta.dir, "../examples/opencode.json"), "utf8"))
     const [name, options] = example.plugin[0]
-    expect(name).toBe("@cosminfuica/opencode-prompt-optimizer")
+    expect(name).toBe("/absolute/path/to/opencode-prompt-optimizer")
     const cfg = await loadConfig(join(tmp, "nope.jsonc"), { builtinDir, env: {}, options })
     expect(cfg).toMatchObject({ model: "openai/gpt-5-mini", turns: 1 })
   })
