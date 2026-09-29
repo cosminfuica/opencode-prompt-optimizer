@@ -76,7 +76,7 @@ try {
     OPENCODE_DISABLE_MODELS_FETCH: "1", OPENCODE_DISABLE_AUTOUPDATE: "1", TERM: "xterm-256color",
   }
   const r = tmux("new-session", "-d", "-s", SESSION, "-x", "150", "-y", "45",
-    "env", ...Object.entries(env).map(([k, v]) => `${k}=${v}`), "opencode", work)
+    "env", ...Object.entries(env).map(([k, v]) => `${k}=${v}`), process.env.OPENCODE_BIN || "opencode", work)
   if (r.exitCode !== 0) throw new Error(r.stderr.toString())
   await waitFor("TUI start", () => /mock|Target|Ask anything|tab/i.test(screen()))
   await Bun.sleep(1500)

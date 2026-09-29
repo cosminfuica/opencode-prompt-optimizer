@@ -428,8 +428,8 @@ Set `"enabled": false` in `prompt-optimizer.jsonc`. It applies from the next mes
 
 ## Development
 
-You need [Bun](https://bun.sh) (tested with 1.4.2). The e2e and TUI smoke tests also need `opencode` on your `PATH`,
-and the TUI smoke test needs `tmux`.
+You need [Bun](https://bun.sh) (tested with 1.4.2). The e2e and TUI smoke tests also need `opencode` on your `PATH`
+(or its path in `OPENCODE_BIN`), and the TUI smoke test needs `tmux`.
 
 ```sh
 git clone https://github.com/cosminfuica/opencode-prompt-optimizer.git
@@ -451,6 +451,11 @@ OC_URL=http://127.0.0.1:4599 bun tests/live.ts <provider/model>   # one real opt
 
 The e2e test reuses your OpenCode package cache (`~/.cache/opencode`), so it can run offline. Set `E2E_FRESH_CACHE=1`
 to isolate the cache too. The first run then downloads packages.
+
+If `opencode` on your `PATH` is a wrapper script (a mise shim, for example), the tests' temporary `$HOME` can keep
+it from starting. Point `OPENCODE_BIN` at the real binary instead: `OPENCODE_BIN=$(mise which opencode) bun run e2e`.
+
+CI runs both suites against the OpenCode version that matches the `@opencode-ai/plugin` dev dependency.
 
 ### Load your local copy in OpenCode
 

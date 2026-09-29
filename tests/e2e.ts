@@ -47,7 +47,7 @@ const kind = (r: Req) =>
 let proc: { kill(): void; exited: Promise<number> } | undefined
 let failed = false
 try {
-  const p = Bun.spawn(["opencode", "serve", "--port", "0", "--hostname", "127.0.0.1", "--print-logs", "--log-level", "INFO"], {
+  const p = Bun.spawn([process.env.OPENCODE_BIN || "opencode", "serve", "--port", "0", "--hostname", "127.0.0.1", "--print-logs", "--log-level", "INFO"], {
     cwd: work,
     env: {
       ...process.env,
