@@ -51,6 +51,13 @@ export function newPartID(): string {
 const isText = (p: Part): p is TextPart => p.type === "text"
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
+// On a session's first message the TUI opens the session view about 0.1 s after sending it, and shows the message
+// once chat.message returns. If a toast was already showing when the view opened, the message is drawn over it and
+// hides its title (opencode 1.18.33). So the toasts of a session's first message wait until this long after the hook
+// started.
+// ponytail: a fixed delay, not a signal from the TUI; raise it if a slow machine still loses the title
+export const FIRST_TOAST_DELAY_MS = 500
+
 // Fire-and-forget; toast/log failures (sync or async) never reach the user's message.
 function quiet(f: () => Promise<unknown>) {
   try { f().catch(() => {}) } catch {}
@@ -60,13 +67,28 @@ export function createHooks(deps: Deps): Pick<Hooks, "chat.message" | "command.e
   const { client } = deps
   const pendingCommands = new Map<string, number>()  // sessionID -> when its slash command started
   const isChild = new Map<string, boolean>()
+  const seen = new Set<string>()  // sessions that had a message since the plugin loaded
 
   type ToastBody = Parameters<HookClient["tui"]["showToast"]>[0]["body"]
-  const toast = (body: ToastBody) => quiet(() => client.tui.showToast({ body }))
+  type Toast = (body: ToastBody) => void
+  // Toasts of one message. On a session's first message they wait (see FIRST_TOAST_DELAY_MS), and a newer toast
+  // replaces a waiting one, as it would on screen. A resumed session's first message waits too; that's harmless.
+  const toaster = (sessionID: string): Toast => {
+    const until = seen.has(sessionID) ? 0 : Date.now() + FIRST_TOAST_DELAY_MS
+    seen.add(sessionID)
+    let waiting: ReturnType<typeof setTimeout> | undefined
+    return (body) => {
+      clearTimeout(waiting)
+      const show = () => quiet(() => client.tui.showToast({ body }))
+      const wait = until - Date.now()
+      if (wait > 0) waiting = setTimeout(show, wait)
+      else show()
+    }
+  }
   // opencode drops `service` from its log lines, so the plugin name goes in the message too (README: grep prompt-optimizer)
   const log = (level: "debug" | "info" | "warn" | "error", message: string, extra?: Record<string, unknown>) =>
     quiet(() => client.app.log({ body: { service: "@cosminfuica/opencode-prompt-optimizer", level, message: `prompt-optimizer: ${message}`, extra } }))
-  const warn = (e: unknown) => {
+  const warn = (toast: Toast, e: unknown) => {
     toast({ title: "Prompt optimizer", message: `Sent your original prompt — ${errMsg(e)}`, variant: "warning", duration: 6000 })
     log("warn", `optimization skipped: ${errMsg(e)}`)
   }
@@ -92,6 +114,7 @@ export function createHooks(deps: Deps): Pick<Hooks, "chat.message" | "command.e
 
     "chat.message": async (input, output) => {
       try {
+        const toast = toaster(input.sessionID)
         // the command's own message follows right away; a mark left by a command that failed before it doesn't count
         const marked = pendingCommands.get(input.sessionID)
         pendingCommands.delete(input.sessionID)
@@ -101,7 +124,7 @@ export function createHooks(deps: Deps): Pick<Hooks, "chat.message" | "command.e
         try {
           cfg = await deps.loadConfig()
         } catch (e) {
-          return warn(e)
+          return warn(toast, e)
         }
         if (!cfg.enabled) return
 
@@ -139,7 +162,7 @@ export function createHooks(deps: Deps): Pick<Hooks, "chat.message" | "command.e
             toast({ title: "✨ Prompt optimized", message: `${preview}\n\n/optimized to view full`, variant: "success", duration: 8000 })
           }
         } catch (e) {
-          warn(e)
+          warn(toast, e)
         }
       } catch (e) {
         log("error", `chat.message hook failed: ${errMsg(e)}`)

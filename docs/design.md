@@ -359,7 +359,12 @@ chat.message steps, in order. Wrap everything in try/catch. Never throw.
 6. `endpoint = await resolveEndpoint(cfg, client)`. If `cfg.toast`, show an info toast:
    title "Prompt optimizer", message `Optimizing with <endpoint.model>…`, and
    `(N candidates + judge)` when turns > 1. Duration = `cfg.timeoutMs`; the next
-   toast replaces it.
+   toast replaces it. On the first message of a session (the first one this
+   process sees), every toast of that message waits until `FIRST_TOAST_DELAY_MS`
+   (500 ms) after the hook started, and a newer toast replaces a waiting one. The
+   TUI opens a new session's view about 0.1 s after its first message is sent, and
+   shows the message when this hook returns. If a toast was already showing when
+   the view opened, the message is drawn over it and hides its title.
 7. `result = await deps.optimize({ endpoint, system: deps.selectPrompt(cfg, target), judgeSystem: cfg.judgePrompt, prompt: text, target, turns: cfg.turns, strategy: cfg.strategy, timeoutMs: cfg.timeoutMs, body: cfg.body })`.
 8. Append the synthetic part as described in "How it works". Do NOT modify the
    user's parts; the transform hook hides them from the model. If `cfg.toast`,
@@ -408,7 +413,7 @@ plugins at runtime: `const solid = await import("@opentui/solid")`, then
 ## Tests
 
 - `bun test` runs the `tests/*.test.ts` unit tests. They must not touch the network
-  or real user config. Use `tests/mock-openai.ts` (`startMock({ port: 0, log, fail })`)
+  or real user config. Use `tests/mock-openai.ts` (`startMock({ port: 0, log, fail, slowMs })`)
   for HTTP.
 - `bun run e2e` builds, then runs the real `opencode serve` with isolated XDG_CONFIG_HOME,
   XDG_DATA_HOME, and XDG_STATE_HOME temp dirs, loading the package through `package.json`.

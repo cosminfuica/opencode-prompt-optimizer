@@ -1,6 +1,7 @@
 // Visual smoke test of the real opencode TUI (isolated XDG dirs + mock provider) in tmux. The package is loaded
 // through its package.json from opencode.json + tui.json "plugin": [<repo>] (dist/, so build first).
-//   bun tests/tui-smoke.ts   1) sends a prompt (2 candidates + judge), opens /optimized
+//   bun tests/tui-smoke.ts   1) sends a prompt (2 candidates + judge), checks that the first message's success toast
+//                              keeps its title, opens /optimized
 //                           2) switches the optimizer to an 85-line reply, opens /optimized and checks that the
 //                              metadata and the last line can be reached with keys, the mouse wheel and a resize
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs"
@@ -16,7 +17,8 @@ const mockLog = join(tmp, "mock.jsonl")
 const SESSION = `po-tui-${process.pid}`
 for (const d of [CFG, work, join(tmp, "home")]) mkdirSync(d, { recursive: true })
 
-const mock = startMock({ port: 0, log: mockLog })
+// A slow optimizer, so the first message renders after the new session's view has opened (see src/hooks.ts).
+const mock = startMock({ port: 0, log: mockLog, slowMs: 700 })
 // optimizer endpoint for step 2: always replies with an 85-line optimized prompt
 const LINES = 85
 const LONG = Array.from({ length: LINES }, (_, i) => `LINE-${i + 1} keep this requirement`).join("\n")
@@ -87,7 +89,9 @@ try {
   keys("Enter")
   await waitFor("optimizer + judge + target requests", () => requests() >= 4)
   await Bun.sleep(1500)
-  console.log("===== after sending the prompt =====\n" + screen())
+  const sent = screen()
+  console.log("===== after sending the prompt =====\n" + sent)
+  check("first message of a session: the success toast keeps its title", sent.includes("Prompt optimized"), sent)
   const dialog = await openOptimized()
   console.log("===== after /optimized =====\n" + dialog)
   check("/optimized dialog shows the optimized prompt", /Optimized prompt/.test(dialog) && /OPTIMIZED#\d+/.test(dialog), dialog)

@@ -125,9 +125,10 @@ A `"provider/model"` from your OpenCode config reuses that provider's API key, i
 can't be the optimizer, and show up as "not found in opencode providers". Local and custom endpoints work too, see
 [Choosing the optimizer model](#choosing-the-optimizer-model).
 
-**3. Chat as usual.** For each message, a toast shows `Optimizing with <model>…`, then a success toast previews the
-rewrite (titled `✨ Prompt optimized`; on the first message of a session OpenCode may show only the preview). The model
-gets the rewrite. Your chat shows what you typed. Set `"toast": false` to hide these two toasts.
+**3. Chat as usual.** For each message, a toast shows `Optimizing with <model>…`, then a success toast titled
+`✨ Prompt optimized` previews the rewrite. On the first message of a session, they wait until about half a second after
+you send it, so that they show on top of the new session. The model gets the rewrite. Your chat shows what you typed.
+Set `"toast": false` to hide these two toasts.
 
 **Requirements:** OpenCode (tested with 1.18.33), and an optimizer model reachable through an OpenAI-compatible
 `/chat/completions` API with an API key.
@@ -429,10 +430,12 @@ Set `"enabled": false` in `prompt-optimizer.jsonc`. It applies from the next mes
   says why, for example: no optimizer model is set, the model wasn't found (or is an OAuth login), there's no base
   URL, an HTTP error, a timeout, a reply cut off at `max_tokens` (raise it, or `max_completion_tokens` for OpenAI
   reasoning models, in `body`), a reply with no `<optimized_prompt>` block, or an invalid config.
-- **Plugin not loading:** `opencode debug config` shows the resolved `plugin` list. OpenCode doesn't log every plugin
-  that fails to load, so check for the plugin's own activity instead: send a message of 20+ characters and look for an
-  `Optimizing with …` toast or a `prompt-optimizer:` log line. If there is none, check that the path in `plugin`
-  exists and that you ran `bun run build` (OpenCode loads `dist/`).
+- **Plugin not loading:** `opencode debug config` shows the resolved `plugin` list. OpenCode doesn't log most plugin
+  load failures (a wrong path, a missing `dist/`, an error on import): it starts as usual, without the plugin. So check
+  for the plugin's own activity instead: send a message of 20+ characters, then look for an `Optimizing with …` toast,
+  or for a `prompt-optimizer: prompt optimized` line in the logs (`prompt-optimizer: optimization skipped` if the
+  optimizer failed). If there is neither, check that the path in `plugin` exists and that you ran `bun run build`
+  (OpenCode loads `dist/`).
 - **No `/optimized` command:** add the plugin to `tui.json` as well.
 - **Updating:** run `git pull && bun run build` in your checkout and restart OpenCode.
 - **Plugin order:** plugins run in the order of the `plugin` array. Some plugins edit the text of your message, for

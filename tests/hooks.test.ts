@@ -1,6 +1,6 @@
-import { describe, expect, setSystemTime, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, jest, setSystemTime, test } from "bun:test"
 import type { Config } from "../src/config.ts"
-import { createHooks, newPartID, type Deps, type HookClient, type Part, type TextPart } from "../src/hooks.ts"
+import { createHooks, FIRST_TOAST_DELAY_MS, newPartID, type Deps, type HookClient, type Part, type TextPart } from "../src/hooks.ts"
 
 const LONG = "Please refactor the login handler to use async/await everywhere."
 
@@ -15,6 +15,7 @@ function cfg(over: Partial<Config> = {}): Config {
 function setup(o: {
   config?: Partial<Config>; loadThrows?: boolean; resolveThrows?: boolean; optimizeThrows?: boolean
   parentID?: string; sessionGetThrows?: boolean; sessionGetError?: boolean; clientThrows?: boolean
+  optimizeGate?: Promise<unknown>  // optimize waits for it
 } = {}) {
   const toasts: any[] = []
   const logs: any[] = []
@@ -43,6 +44,7 @@ function setup(o: {
     },
     optimize: async (input) => {
       calls.optimize.push(input)
+      await o.optimizeGate
       if (o.optimizeThrows) throw new Error("timeout")
       return { prompt: "OPTIMIZED: " + input.prompt, candidates: ["a", "OPTIMIZED"], chosen: 1, judged: true, ms: 42 }
     },
@@ -63,12 +65,17 @@ async function send(h: ReturnType<typeof setup>, parts: Part[], sessionID = "ses
   const m = msg(parts, sessionID)
   const before = parts.map((p) => ({ ...p }))
   await h.hooks["chat.message"]!(m.input, m.output)
+  jest.advanceTimersByTime(FIRST_TOAST_DELAY_MS)  // shows toasts held back on a session's first message
   return { parts: m.output.parts, before, same: m.output.parts === parts }
 }
 
 describe("chat.message", () => {
+  beforeEach(() => jest.useFakeTimers())
+  afterEach(() => jest.useRealTimers())
+
   test("success appends one synthetic part, user parts untouched", async () => {
     const h = setup({ config: { turns: 2 } })
+    await send(h, [text("hi")])  // too short to optimize; it makes this a later message, whose toasts aren't held back
     const file = { id: newPartID(), sessionID: "ses_1", messageID: "msg_1", type: "file", mime: "text/plain", url: "file:///a" } as Part
     const user = text(LONG)
     const r = await send(h, [user, file])
@@ -92,6 +99,7 @@ describe("chat.message", () => {
 
   test("joins multiple user text parts, ignores synthetic ones; long preview is cut", async () => {
     const h = setup()
+    await send(h, [text("hi")])
     const long = "x".repeat(400)
     await send(h, [text("first part of it"), text("SYNTH", { synthetic: true }), text(long)])
     expect(h.calls.optimize[0].prompt).toBe("first part of it\n\n" + long)
@@ -180,6 +188,61 @@ describe("chat.message", () => {
     const r = await send(h, [text(LONG)])
     expect(r.parts.length).toBe(2)
     expect(h.toasts.length).toBe(0)
+  })
+
+  // A new session's first message renders after its view opens; a toast shown before the view opened loses its title
+  // then (opencode 1.18.33, see FIRST_TOAST_DELAY_MS).
+  describe("first message of a session", () => {
+    const hook = (h: ReturnType<typeof setup>, sessionID = "ses_1") => {
+      const m = msg([text(LONG)], sessionID)
+      return h.hooks["chat.message"]!(m.input, m.output)  // like send(), without showing held-back toasts
+    }
+    const start = (o: Parameters<typeof setup>[0] = {}) => {
+      let release!: () => void
+      const h = setup({ optimizeGate: new Promise<void>((r) => { release = r }), ...o })
+      const done = hook(h)
+      return { h, release, done, optimizing: async () => { while (!h.calls.optimize.length) await null } }
+    }
+
+    test("the progress toast waits FIRST_TOAST_DELAY_MS", async () => {
+      const { h, release, done, optimizing } = start()
+      await optimizing()
+      jest.advanceTimersByTime(FIRST_TOAST_DELAY_MS - 1)
+      expect(h.toasts).toEqual([])
+      jest.advanceTimersByTime(1)
+      expect(h.toasts.map((t) => t.title)).toEqual(["Prompt optimizer"])
+      release(); await done
+      expect(h.toasts.map((t) => t.title)).toEqual(["Prompt optimizer", "✨ Prompt optimized"])
+    })
+
+    test("a result within the delay replaces the held-back toast", async () => {
+      const { h, release, done, optimizing } = start()
+      await optimizing(); release(); await done
+      expect(h.toasts).toEqual([])
+      jest.advanceTimersByTime(FIRST_TOAST_DELAY_MS)
+      expect(h.toasts.map((t) => t.title)).toEqual(["✨ Prompt optimized"])
+      jest.advanceTimersByTime(60_000)
+      expect(h.toasts.length).toBe(1)
+    })
+
+    test("the failure toast waits too", async () => {
+      const { h, release, done, optimizing } = start({ optimizeThrows: true })
+      await optimizing(); release(); await done
+      expect(h.toasts).toEqual([])
+      jest.advanceTimersByTime(FIRST_TOAST_DELAY_MS)
+      expect(h.toasts.map((t) => t.variant)).toEqual(["warning"])
+    })
+
+    test("later messages toast at once; another new session waits again", async () => {
+      const h = setup()
+      await send(h, [text("hi")])
+      await hook(h)
+      expect(h.toasts.map((t) => t.variant)).toEqual(["info", "success"])
+      await hook(h, "ses_2")
+      expect(h.toasts.length).toBe(2)
+      jest.advanceTimersByTime(FIRST_TOAST_DELAY_MS)
+      expect(h.toasts.length).toBe(3)
+    })
   })
 
   // opencode drops the `service` field from log lines, so the README's `grep prompt-optimizer` needs it in the text
