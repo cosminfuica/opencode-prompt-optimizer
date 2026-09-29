@@ -13,3 +13,15 @@ jobs:
       - run: bun run typecheck
       - run: bun test
       - run: bun run build
+  # A real opencode, the same version as @opencode-ai/plugin, so a Renovate bump is tested against the
+  # opencode it targets (tui-smoke catches dialog layout changes, see src/tui.ts).
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: npm install -g "opencode-ai@$(node -p 'require("./package.json").devDependencies["@opencode-ai/plugin"]')"
+      - run: command -v tmux || (sudo apt-get update && sudo apt-get install -y tmux)
+      - run: bun run e2e
+      - run: bun run tui-smoke

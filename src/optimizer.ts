@@ -28,27 +28,33 @@ export async function resolveEndpoint(
 ): Promise<Endpoint> {
   if (cfg.baseURL) {
     // custom endpoint: only the user's own apiKey, never opencode provider keys
-    if (!cfg.model) throw new Error(`"model" is required when "baseURL" is set in prompt-optimizer.jsonc`)
+    if (!cfg.model) throw new Error(`"model" is required when "baseURL" is set in the plugin config`)
     return { baseURL: cfg.baseURL, apiKey: cfg.apiKey, model: cfg.model, headers: cfg.headers }
   }
   const ref = cfg.model ?? (await client.config.get()).data?.small_model
-  if (!ref) throw new Error(`no optimizer model — set "model" in prompt-optimizer.jsonc or "small_model" in opencode config`)
+  if (!ref) throw new Error(`no optimizer model — set "model" in the plugin config or "small_model" in opencode config`)
   const slash = ref.indexOf("/")
-  if (slash <= 0) throw new Error(`optimizer model "${ref}" must be "provider/model" (or set "baseURL" in prompt-optimizer.jsonc)`)
+  if (slash <= 0) throw new Error(`optimizer model "${ref}" must be "provider/model" (or set "baseURL" in the plugin config)`)
   const providerID = ref.slice(0, slash)
   const modelKey = ref.slice(slash + 1)
 
   const providers = (await client.config.providers()).data?.providers ?? []
   const provider = providers.find((p) => p.id === providerID)
   const model = provider?.models?.[modelKey]
-  if (!provider || !model) throw new Error(`optimizer model "${ref}" not found in opencode providers`)
+  if (!provider || !model) throw new Error(`optimizer model "${ref}" not found in opencode providers — see \`opencode models\`; OAuth/subscription logins can't be the optimizer`)
 
-  const baseURL = model.api?.url || provider.options?.baseURL || KNOWN[model.api?.npm ?? ""]
-  if (!baseURL) throw new Error(`no baseURL for provider "${providerID}" — set "baseURL" in prompt-optimizer.jsonc`)
-  const envName = provider.env?.[0]
+  const npm = model.api?.npm ?? "@ai-sdk/openai-compatible"  // opencode's default too
+  // a catalogue URL speaks OpenAI chat only for these packages (not e.g. @ai-sdk/amazon-bedrock/mantle)
+  const catalogueURL = npm === "@ai-sdk/openai-compatible" || KNOWN[npm] ? model.api?.url : undefined
+  const baseURL = provider.options?.baseURL || catalogueURL || KNOWN[npm]
+  if (!baseURL) throw new Error(`no OpenAI-compatible baseURL for provider "${providerID}" — set "baseURL" in the plugin config`)
+  if (baseURL.includes("${")) throw new Error(`provider "${providerID}" has a templated URL (${baseURL}) — set "baseURL" in the plugin config`)
+  // ponytail: env-name heuristic (models.dev also lists IDs/regions; a SigV4 secret isn't a bearer token);
+  // map key vars per provider if one ever ends in something else
+  const envKey = provider.env?.filter((n) => /(KEY|TOKEN|PAT)$/i.test(n) && !/SECRET/i.test(n)).map((n) => process.env[n]).find(Boolean)
   return {
     baseURL,
-    apiKey: provider.key ?? provider.options?.apiKey ?? (envName ? process.env[envName] : undefined),
+    apiKey: provider.key ?? provider.options?.apiKey ?? envKey,
     model: model.api?.id || modelKey,
     headers: { ...provider.options?.headers, ...cfg.headers },
   }
@@ -60,6 +66,9 @@ export async function chat(
   opts: { timeoutMs: number; body?: Record<string, unknown> },
 ): Promise<string> {
   const url = `${endpoint.baseURL.replace(/\/+$/, "")}/chat/completions`
+  const failed = (e: any) => e?.name === "TimeoutError" || e?.name === "AbortError"
+    ? new Error(`optimizer request timed out after ${opts.timeoutMs}ms`)
+    : new Error(`optimizer request to ${url} failed: ${e?.message ?? e}`)
   let res: Response
   try {
     res = await fetch(url, {
@@ -69,33 +78,53 @@ export async function chat(
         ...(endpoint.apiKey ? { Authorization: `Bearer ${endpoint.apiKey}` } : {}),
         ...endpoint.headers,
       },
-      body: JSON.stringify({ model: endpoint.model, messages, stream: false, ...opts.body }),
+      body: JSON.stringify({ ...opts.body, model: endpoint.model, messages, stream: false }),
       signal: AbortSignal.timeout(opts.timeoutMs),
     })
-  } catch (e: any) {
-    if (e?.name === "TimeoutError" || e?.name === "AbortError")
-      throw new Error(`optimizer request timed out after ${opts.timeoutMs}ms`)
-    throw new Error(`optimizer request to ${url} failed: ${e?.message ?? e}`)
+  } catch (e) {
+    throw failed(e)
   }
   if (!res.ok) {
     const text = await res.text().catch(() => "")
-    throw new Error(`optimizer endpoint returned HTTP ${res.status}: ${text.slice(0, 200)}`)
+    const hint = res.status === 404 ? ` (no OpenAI-compatible chat API at ${url}? set "baseURL" in the plugin config)` : ""
+    throw new Error(`optimizer endpoint returned HTTP ${res.status}: ${text.slice(0, 200)}${hint}`)
   }
-  const data: any = await res.json()
+  let payload: string
+  try { payload = await res.text() } catch (e) { throw failed(e) }  // the timeout also covers a body that stalls
+  let data: any
+  try { data = JSON.parse(payload) } catch {
+    const t = payload.replace(/\s+/g, " ").trim()
+    throw new Error(`optimizer endpoint returned non-JSON ("${t.length > 100 ? t.slice(0, 100) + "…" : t}"); is "baseURL" the …/v1 API root?`)
+  }
   const choice = data?.choices?.[0]
   if (choice?.finish_reason === "length")
-    throw new Error(`optimizer reply was cut off at the token limit; raise "max_tokens" under "body" in prompt-optimizer.jsonc`)
+    throw new Error(`optimizer reply was cut off at the token limit; raise "max_tokens" (or "max_completion_tokens" for OpenAI reasoning models) under "body" in the plugin config`)
   const c = choice?.message?.content
   const raw = typeof c === "string" ? c : Array.isArray(c) ? c.map((p: any) => p?.text ?? "").join("") : ""
-  const content = raw.replace(/<think>[\s\S]*?<\/think>/g, "").trim()
+  const content = raw.replace(/^\s*<think>[\s\S]*?<\/think>/, "").trim()
   if (!content) throw new Error("optimizer model returned empty content")
   return content
 }
 
 export function extractTag(text: string, tag: string): string | undefined {
-  // last non-empty occurrence wins: models sometimes echo the format instructions or an empty tag pair
-  const all = [...text.matchAll(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, "g"))].map((m) => m[1]!.trim()).filter(Boolean)
-  return all.at(-1)
+  // last non-empty complete top-level block wins; a quoted copy of the tag inside a block stays text,
+  // and blocks inside a closed top-level <think>…</think> are ignored
+  // ponytail: a quoted, unpaired </tag> still ends the block early
+  const blocks: string[] = []
+  let depth = 0, start = 0, skipTo = 0
+  for (const m of text.matchAll(new RegExp(`<(/?)(think|${tag})>`, "g"))) {
+    if (m.index! < skipTo) continue
+    if (m[2] === "think") {
+      if (depth === 0 && !m[1]) {
+        const end = text.indexOf("</think>", m.index)
+        if (end >= 0) skipTo = end + 1
+      }
+      continue
+    }
+    if (!m[1]) { if (depth++ === 0) start = m.index! + m[0].length }
+    else if (depth > 0 && --depth === 0) blocks.push(text.slice(start, m.index).trim())
+  }
+  return blocks.filter(Boolean).at(-1)
 }
 
 const head = (prompt: string, target: string) =>
@@ -162,7 +191,7 @@ export async function optimize(input: OptimizeInput): Promise<OptimizeResult> {
       { role: "system", content: input.judgeSystem },
       { role: "user", content: buildJudgeMessage(input.prompt, input.target, candidates) },
     ], opts)
-    const k = Number(extractTag(reply, "best")?.match(/\d+/)?.[0] ?? reply.match(/\d+/)?.[0])
+    const k = Number(extractTag(reply, "best")?.match(/\d+/)?.[0] ?? reply.match(/^\s*(\d+)\s*$/)?.[1])
     if (Number.isInteger(k) && k >= 1 && k <= candidates.length) return done(k - 1, true)
   } catch {
     // judge failure: fall through to the strategy's default pick

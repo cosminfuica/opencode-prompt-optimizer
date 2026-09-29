@@ -134,7 +134,9 @@ re-read on every message, so edits apply live.
 The same keys can be given as plugin options in opencode.json
 (`["@cosminfuica/opencode-prompt-optimizer", { … }]`, the plugin function's second
 argument). They are the base; top-level keys in the file replace them (shallow merge).
-Both go through the same validation.
+Both go through the same validation. `"enabled": false` in either place (the file wins, as for any key)
+pauses the plugin even when other keys are invalid, and `{file:}` references in the file aren't read then;
+only invalid JSONC or a non-boolean `enabled` still produce an error.
 
 | key | type | default | notes |
 |---|---|---|---|
@@ -178,7 +180,6 @@ export interface Config {
   toast: boolean
   prompts: Record<string, string>   // resolved TEXT, insertion order kept
   judgePrompt: string               // resolved text
-  path?: string                     // file used; undefined => defaults
 }
 export interface LoadOptions { builtinDir?: string; env?: Record<string, string | undefined>; options?: Record<string, unknown> }
 export function configPath(env?: Record<string, string | undefined>): string
@@ -225,7 +226,10 @@ resolveEndpoint:
 - Otherwise: `ref = cfg.model ?? (await client.config.get()).data?.small_model`, then split
   at the first "/" into providerID and modelKey. Look up the provider and the model
   in `client.config.providers()`. Then:
-  - `baseURL = model.api?.url || provider.options?.baseURL || KNOWN[model.api?.npm]`, with:
+  - `baseURL = provider.options?.baseURL || <catalogue url> || KNOWN[npm]` (opencode's order: a user's
+    `baseURL` override wins over the models.dev URL). `npm` is `model.api?.npm`, defaulting to
+    `@ai-sdk/openai-compatible` as in opencode. `<catalogue url>` is `model.api?.url`, used only when `npm` is
+    `@ai-sdk/openai-compatible` or a KNOWN package; other packages' URLs don't speak the OpenAI chat API. With:
     ```
     KNOWN = { "@ai-sdk/openai": "https://api.openai.com/v1",
       "@ai-sdk/anthropic": "https://api.anthropic.com/v1",
@@ -235,29 +239,36 @@ resolveEndpoint:
       "@ai-sdk/deepseek": "https://api.deepseek.com/v1", "@ai-sdk/xai": "https://api.x.ai/v1" }
     ```
     (Each of these vendors serves an OpenAI-compatible /chat/completions.)
-  - `apiKey = provider.key ?? provider.options?.apiKey ?? process.env[provider.env?.[0]]`.
-    OAuth-only logins have no key; the call then fails and the user gets the
-    original prompt plus a toast.
+  - `apiKey = provider.key ?? provider.options?.apiKey ?? <env key>`. opencode fills `provider.key` only when
+    the provider lists exactly one env var, so `<env key>` is the value of the first variable in `provider.env`
+    that is set and has a credential-style name (ending in KEY, TOKEN or PAT). Names containing SECRET are
+    skipped: a SigV4 secret isn't a bearer token. OAuth-only logins have no key; the call then fails and the
+    user gets the original prompt plus a toast.
   - `model = model.api?.id || modelKey`. The config key can differ from the API id,
     e.g. `claude-sonnet-5-fast` has api.id `claude-sonnet-5(none)`.
   - `headers = { ...provider.options?.headers, ...cfg.headers }`
   - If anything is missing, throw a readable Error that says what to set, e.g.
-    `optimizer model "x/y" not found in opencode providers` or
-    `no baseURL for provider "x" — set "baseURL" in prompt-optimizer.jsonc`.
+    `optimizer model "x/y" not found in opencode providers — see \`opencode models\`; …` or
+    `no OpenAI-compatible baseURL for provider "x" — set "baseURL" in the plugin config`. A URL that still
+    contains `${VAR}` (opencode fills these in; the plugin doesn't) throws
+    `provider "x" has a templated URL (…) — set "baseURL" in the plugin config`.
 
 chat: POST `${baseURL without trailing /}/chat/completions` with the JSON
-`{ model, messages, stream: false, ...body }` and the headers
+`{ ...body, model, messages, stream: false }` (so `body` can't override those three) and the headers
 `Content-Type: application/json`, `Authorization: Bearer <apiKey>` (only if apiKey), and `...headers`.
-Use `AbortSignal.timeout(timeoutMs)`. A non-2xx response throws an Error with the
-status and a snippet of the body. `choices[0].finish_reason === "length"` throws: the
+Use `AbortSignal.timeout(timeoutMs)`; it also covers reading the body. A non-2xx response throws an Error with
+the status and a snippet of the body; a 404 adds a hint that there's no OpenAI-compatible chat API at that URL.
+A 200 that isn't JSON throws `optimizer endpoint returned non-JSON (…); is "baseURL" the …/v1 API root?`. `choices[0].finish_reason === "length"` throws: the
 reply was cut off, so the message says to raise `max_tokens`. Content is `choices[0].message.content` (a string,
-or an array of `{text}` pieces). Strip `<think>…</think>` blocks and trim. Empty
-content throws.
+or an array of `{text}` pieces). Strip a leading `<think>…</think>` block and trim; a `<think>` quoted
+inside the answer stays. Empty content throws.
 
 optimize:
 - The candidate call uses `[system: input.system, user: buildOptimizerMessage(prompt, target, previous?)]`.
-  The candidate is the last non-empty `<optimized_prompt>` block (`extractTag`). If there is none,
-  the call fails like any other error. The raw reply is never used as the prompt.
+  The candidate is the last non-empty, complete, top-level `<optimized_prompt>` block (`extractTag`).
+  `extractTag` pairs tags by nesting depth, so a quoted copy of the tag inside the block stays text, and it
+  ignores blocks inside a closed top-level `<think>…</think>`. If there is no block, the call fails like any
+  other error. The raw reply is never used as the prompt.
 - turns = 1 makes one call.
 - strategy "parallel", turns = N: run N independent calls in parallel
   (`Promise.allSettled`, no `previous`) and keep the successes in input order.
@@ -268,8 +279,8 @@ optimize:
   - 0 successes: throw with the first error.
   - 1 success: use it (`judged = false`).
   - 2 or more: one judge call with `[system: judgeSystem, user: buildJudgeMessage(prompt, target, candidates)]`.
-    Parse `<best>k</best>` (1-based). If that fails, use the first integer in the
-    reply. If the judge fails or k is out of range, use the LAST candidate for
+    Parse `<best>k</best>` (1-based). If that fails, accept a reply that is only an
+    integer; numbers in prose never count. If the judge fails or k is out of range, use the LAST candidate for
     "refine" and candidate 1 for "parallel". `judged` is true only when the judge's
     answer was used.
 
@@ -334,16 +345,18 @@ export const PromptOptimizerPlugin: Plugin = async ({ client }, options) =>
 hooks.ts must use only `import type` from config.ts/optimizer.ts. Every runtime
 function arrives through `deps`, so hook tests need no other module.
 chat.message steps, in order. Wrap everything in try/catch. Never throw.
-1. If `command.execute.before` marked this sessionID: clear the mark and skip.
-   Slash-command templates are not optimized.
+1. If `command.execute.before` marked this sessionID less than 10 s ago: clear the mark and skip.
+   Slash-command templates are not optimized. An older mark (the command failed before its
+   message was built) is cleared and ignored.
 2. `cfg = await loadConfig()`. On error: warning toast (the message), log, skip.
    If `!cfg.enabled`, skip.
 3. `userParts` = text parts with `!synthetic && !ignored`. `text` = their texts joined
    by "\n\n", then trimmed. Skip if empty, if `text.length < cfg.minChars`, or if any
    skipPattern matches.
 4. Skip child sessions (subagents/task tool): `client.session.get` returns a
-   `parentID`. Cache the result per sessionID. If the lookup fails, treat the
-   session as not a child.
+   `parentID`. Cache the result per sessionID, only when the lookup returned `data`. If the
+   lookup throws or returns `{ error }` (opencode's client doesn't throw on HTTP errors), treat
+   the session as not a child and look it up again next time.
 5. `target = output.message.model ?? input.model` (both `{providerID, modelID}`), as the string `"p/m"`.
 6. `endpoint = await resolveEndpoint(cfg, client)`. If `cfg.toast`, show an info toast:
    title "Prompt optimizer", message `Optimizing with <endpoint.model>…`, and
@@ -358,11 +371,12 @@ chat.message steps, in order. Wrap everything in try/catch. Never throw.
 9. On any error in 6–8: parts stay untouched. Warning toast (always shown): title
    "Prompt optimizer", message `Sent your original prompt — <error.message>`,
    duration 6000. Log at warn level.
-Logging goes through `client.app.log` with service "@cosminfuica/opencode-prompt-optimizer". Never log apiKey.
+Logging goes through `client.app.log` with service "@cosminfuica/opencode-prompt-optimizer", and every message
+starts with "prompt-optimizer: " because opencode drops the service field from its log lines. Never log apiKey.
 Toast/log failures are swallowed.
 
-`command.execute.before({sessionID})`: record `sessionID` in a Set of pending
-slash-command runs. Step 1 above consumes it. Slash commands arrive as rendered
+`command.execute.before({sessionID})`: record `sessionID` with the current time in a Map of
+pending slash-command runs. Step 1 above consumes it. Slash commands arrive as rendered
 templates; optimizing them would be surprising.
 
 `experimental.chat.messages.transform`: exactly as described in "How it works".

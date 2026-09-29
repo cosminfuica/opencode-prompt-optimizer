@@ -10,7 +10,6 @@ export interface Config {
   toast: boolean
   prompts: Record<string, string>   // resolved TEXT, insertion order kept
   judgePrompt: string               // resolved text
-  path?: string                     // file used; undefined => defaults
 }
 export interface LoadOptions {
   builtinDir?: string; env?: Record<string, string | undefined>
@@ -50,7 +49,9 @@ export async function loadConfig(path?: string, opts: LoadOptions = {}): Promise
     catch (e) { fail(`invalid JSONC (${(e as Error).message})`) }
     if (!isObject(parsed)) fail("top level must be an object")
     const home = env.HOME || homedir()
-    raw = { ...raw, ...(substitute(parsed, env, dirname(resolve(file)), home, fail) as Record<string, unknown>) }
+    // a paused plugin skips {file:} reads, which can fail; "enabled" is a boolean, so substitution never changes it
+    const paused = { ...raw, ...(parsed as Record<string, unknown>) }.enabled === false
+    raw = { ...raw, ...((paused ? parsed : substitute(parsed, env, dirname(resolve(file)), home, fail)) as Record<string, unknown>) }
   }
 
   const bool = (k: string, d: boolean) => {
@@ -76,6 +77,9 @@ export async function loadConfig(path?: string, opts: LoadOptions = {}): Promise
     if (!isObject(v) || Object.values(v).some((x) => typeof x !== "string")) fail(`"${k}" must be an object of strings`)
     return { ...(v as Record<string, string>) }
   }
+
+  // "enabled": false is how users pause the plugin, so it also silences errors in every other key
+  if (!bool("enabled", true)) raw = { enabled: false }
 
   const strategy = raw.strategy ?? "parallel"
   if (strategy !== "parallel" && strategy !== "refine") fail(`"strategy" must be "parallel" or "refine"`)
@@ -110,7 +114,6 @@ export async function loadConfig(path?: string, opts: LoadOptions = {}): Promise
     toast: bool("toast", true),
     prompts,
     judgePrompt: str("judgePrompt") ?? builtin("judge.md"),
-    path: exists ? file : undefined,
   }
 }
 

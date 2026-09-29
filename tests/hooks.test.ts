@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, setSystemTime, test } from "bun:test"
 import type { Config } from "../src/config.ts"
 import { createHooks, newPartID, type Deps, type HookClient, type Part, type TextPart } from "../src/hooks.ts"
 
@@ -14,7 +14,7 @@ function cfg(over: Partial<Config> = {}): Config {
 
 function setup(o: {
   config?: Partial<Config>; loadThrows?: boolean; resolveThrows?: boolean; optimizeThrows?: boolean
-  parentID?: string; sessionGetThrows?: boolean; clientThrows?: boolean
+  parentID?: string; sessionGetThrows?: boolean; sessionGetError?: boolean; clientThrows?: boolean
 } = {}) {
   const toasts: any[] = []
   const logs: any[] = []
@@ -25,6 +25,7 @@ function setup(o: {
       get: async () => {
         calls.sessionGet++
         if (o.sessionGetThrows) throw new Error("nope")
+        if (o.sessionGetError) return { error: { name: "NotFoundError" } } as any
         return { data: o.parentID ? { parentID: o.parentID } : {} }
       },
     },
@@ -126,14 +127,18 @@ describe("chat.message", () => {
     })
   }
 
-  test("child lookup is cached; lookup error => not a child", async () => {
+  test("child lookup is cached; lookup error => not a child, retried next time", async () => {
     const h = setup({ parentID: "p" })
     await send(h, [text(LONG)])
     await send(h, [text(LONG)])
     expect(h.calls.sessionGet).toBe(1)
-    const e = setup({ sessionGetThrows: true })
-    const r = await send(e, [text(LONG)])
-    expect(r.parts.length).toBe(2)
+    // the SDK client opencode hands to plugins returns { error } on HTTP errors instead of throwing
+    for (const o of [{ sessionGetThrows: true }, { sessionGetError: true }]) {
+      const e = setup(o)
+      expect((await send(e, [text(LONG)])).parts.length).toBe(2)
+      await send(e, [text(LONG)])
+      expect(e.calls.sessionGet).toBe(2)
+    }
   })
 
   test("slash-command mark skips exactly one message", async () => {
@@ -142,6 +147,16 @@ describe("chat.message", () => {
     expect((await send(h, [text(LONG)])).parts.length).toBe(1)
     expect((await send(h, [text(LONG)], "ses_2")).parts.length).toBe(2)
     expect((await send(h, [text(LONG)])).parts.length).toBe(2)
+  })
+
+  test("a stale slash-command mark (the command failed before chat.message) is ignored after 10 s", async () => {
+    const h = setup()
+    try {
+      setSystemTime(new Date("2026-01-01T00:00:00Z"))
+      await h.hooks["command.execute.before"]!({ command: "review", sessionID: "ses_1", arguments: "" }, { parts: [] })
+      setSystemTime(new Date("2026-01-01T00:00:11Z"))
+      expect((await send(h, [text(LONG)])).parts.length).toBe(2)
+    } finally { setSystemTime() }
   })
 
   for (const [name, opts] of [
@@ -165,6 +180,21 @@ describe("chat.message", () => {
     const r = await send(h, [text(LONG)])
     expect(r.parts.length).toBe(2)
     expect(h.toasts.length).toBe(0)
+  })
+
+  // opencode drops the `service` field from log lines, so the README's `grep prompt-optimizer` needs it in the text
+  test("every log message starts with the plugin name", async () => {
+    const logs = []
+    for (const o of [{}, { optimizeThrows: true }, { loadThrows: true }]) {
+      const h = setup(o)
+      await send(h, [text(LONG)])
+      logs.push(...h.logs)
+    }
+    const t = setup()
+    await t.hooks["experimental.chat.messages.transform"]!({}, { messages: null } as any)
+    logs.push(...t.logs)
+    expect(logs.map((l) => l.level).sort()).toEqual(["error", "info", "warn", "warn"])
+    for (const l of logs) expect(l.message).toStartWith("prompt-optimizer: ")
   })
 
   test("never throws when toast/log throw", async () => {

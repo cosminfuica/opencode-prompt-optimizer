@@ -58,13 +58,14 @@ function quiet(f: () => Promise<unknown>) {
 
 export function createHooks(deps: Deps): Pick<Hooks, "chat.message" | "command.execute.before" | "experimental.chat.messages.transform"> {
   const { client } = deps
-  const pendingCommands = new Set<string>()
+  const pendingCommands = new Map<string, number>()  // sessionID -> when its slash command started
   const isChild = new Map<string, boolean>()
 
   type ToastBody = Parameters<HookClient["tui"]["showToast"]>[0]["body"]
   const toast = (body: ToastBody) => quiet(() => client.tui.showToast({ body }))
+  // opencode drops `service` from its log lines, so the plugin name goes in the message too (README: grep prompt-optimizer)
   const log = (level: "debug" | "info" | "warn" | "error", message: string, extra?: Record<string, unknown>) =>
-    quiet(() => client.app.log({ body: { service: "@cosminfuica/opencode-prompt-optimizer", level, message, extra } }))
+    quiet(() => client.app.log({ body: { service: "@cosminfuica/opencode-prompt-optimizer", level, message: `prompt-optimizer: ${message}`, extra } }))
   const warn = (e: unknown) => {
     toast({ title: "Prompt optimizer", message: `Sent your original prompt — ${errMsg(e)}`, variant: "warning", duration: 6000 })
     log("warn", `optimization skipped: ${errMsg(e)}`)
@@ -75,7 +76,8 @@ export function createHooks(deps: Deps): Pick<Hooks, "chat.message" | "command.e
     if (cached !== undefined) return cached
     try {
       const res = await client.session.get({ path: { id: sessionID } })
-      const child = !!res?.data?.parentID
+      if (!res?.data) return false  // HTTP error: opencode's client returns { error } instead of throwing
+      const child = !!res.data.parentID
       isChild.set(sessionID, child)
       return child
     } catch {
@@ -85,12 +87,15 @@ export function createHooks(deps: Deps): Pick<Hooks, "chat.message" | "command.e
 
   return {
     "command.execute.before": async (input) => {
-      try { pendingCommands.add(input.sessionID) } catch {}
+      try { pendingCommands.set(input.sessionID, Date.now()) } catch {}
     },
 
     "chat.message": async (input, output) => {
       try {
-        if (pendingCommands.delete(input.sessionID)) return
+        // the command's own message follows right away; a mark left by a command that failed before it doesn't count
+        const marked = pendingCommands.get(input.sessionID)
+        pendingCommands.delete(input.sessionID)
+        if (marked !== undefined && Date.now() - marked < 10_000) return
 
         let cfg: Config
         try {
