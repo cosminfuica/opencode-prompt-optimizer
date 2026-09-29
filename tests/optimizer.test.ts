@@ -222,7 +222,7 @@ describe("optimize", () => {
     })
 
     test("cut off at max_tokens (finish_reason length) => throws, suggests max_tokens", async () => {
-      await expect(run("truncated")).rejects.toThrow(`cut off at the token limit; raise "max_tokens"`)
+      await expect(run("truncated")).rejects.toThrow(`cut off at the token limit; raise "max_tokens" (or "max_completion_tokens" for OpenAI reasoning models) under "body" in the plugin config`)
     })
 
     test("parallel turns=2, one malformed + one good => good one used, no judge call", async () => {
@@ -285,10 +285,12 @@ describe("resolveEndpoint", () => {
   })
 
   test("readable errors", async () => {
-    await expect(resolveEndpoint(cfg(), client())).rejects.toThrow('set "model"')
+    await expect(resolveEndpoint(cfg(), client())).rejects.toThrow('set "model" in the plugin config')
     await expect(resolveEndpoint(cfg({ model: "nope/m" }), client())).rejects.toThrow('"nope/m" not found in opencode providers')
     await expect(resolveEndpoint(cfg({ model: "openai/missing" }), client())).rejects.toThrow("not found")
-    await expect(resolveEndpoint(cfg({ model: "nourl/m" }), client())).rejects.toThrow('no baseURL for provider "nourl"')
+    await expect(resolveEndpoint(cfg({ model: "nourl/m" }), client())).rejects.toThrow('no baseURL for provider "nourl" — set "baseURL" in the plugin config')
+    await expect(resolveEndpoint(cfg({ model: "bare" }), client())).rejects.toThrow('(or set "baseURL" in the plugin config)')
+    await expect(resolveEndpoint(cfg({ baseURL: "http://x/v1" }), client())).rejects.toThrow('"model" is required when "baseURL" is set in the plugin config')
   })
 })
 

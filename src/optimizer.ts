@@ -28,13 +28,13 @@ export async function resolveEndpoint(
 ): Promise<Endpoint> {
   if (cfg.baseURL) {
     // custom endpoint: only the user's own apiKey, never opencode provider keys
-    if (!cfg.model) throw new Error(`"model" is required when "baseURL" is set in prompt-optimizer.jsonc`)
+    if (!cfg.model) throw new Error(`"model" is required when "baseURL" is set in the plugin config`)
     return { baseURL: cfg.baseURL, apiKey: cfg.apiKey, model: cfg.model, headers: cfg.headers }
   }
   const ref = cfg.model ?? (await client.config.get()).data?.small_model
-  if (!ref) throw new Error(`no optimizer model — set "model" in prompt-optimizer.jsonc or "small_model" in opencode config`)
+  if (!ref) throw new Error(`no optimizer model — set "model" in the plugin config or "small_model" in opencode config`)
   const slash = ref.indexOf("/")
-  if (slash <= 0) throw new Error(`optimizer model "${ref}" must be "provider/model" (or set "baseURL" in prompt-optimizer.jsonc)`)
+  if (slash <= 0) throw new Error(`optimizer model "${ref}" must be "provider/model" (or set "baseURL" in the plugin config)`)
   const providerID = ref.slice(0, slash)
   const modelKey = ref.slice(slash + 1)
 
@@ -44,7 +44,7 @@ export async function resolveEndpoint(
   if (!provider || !model) throw new Error(`optimizer model "${ref}" not found in opencode providers`)
 
   const baseURL = provider.options?.baseURL || model.api?.url || KNOWN[model.api?.npm ?? ""]
-  if (!baseURL) throw new Error(`no baseURL for provider "${providerID}" — set "baseURL" in prompt-optimizer.jsonc`)
+  if (!baseURL) throw new Error(`no baseURL for provider "${providerID}" — set "baseURL" in the plugin config`)
   // ponytail: env-name heuristic (models.dev also lists IDs/regions; a SigV4 secret isn't a bearer token);
   // map key vars per provider if one ever ends in something else
   const envKey = provider.env?.filter((n) => /(KEY|TOKEN|PAT)$/i.test(n) && !/SECRET/i.test(n)).map((n) => process.env[n]).find(Boolean)
@@ -86,7 +86,7 @@ export async function chat(
   const data: any = await res.json()
   const choice = data?.choices?.[0]
   if (choice?.finish_reason === "length")
-    throw new Error(`optimizer reply was cut off at the token limit; raise "max_tokens" under "body" in prompt-optimizer.jsonc`)
+    throw new Error(`optimizer reply was cut off at the token limit; raise "max_tokens" (or "max_completion_tokens" for OpenAI reasoning models) under "body" in the plugin config`)
   const c = choice?.message?.content
   const raw = typeof c === "string" ? c : Array.isArray(c) ? c.map((p: any) => p?.text ?? "").join("") : ""
   const content = raw.replace(/^\s*<think>[\s\S]*?<\/think>/, "").trim()

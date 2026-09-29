@@ -246,7 +246,7 @@ resolveEndpoint:
   - `headers = { ...provider.options?.headers, ...cfg.headers }`
   - If anything is missing, throw a readable Error that says what to set, e.g.
     `optimizer model "x/y" not found in opencode providers` or
-    `no baseURL for provider "x" — set "baseURL" in prompt-optimizer.jsonc`.
+    `no baseURL for provider "x" — set "baseURL" in the plugin config`.
 
 chat: POST `${baseURL without trailing /}/chat/completions` with the JSON
 `{ model, messages, stream: false, ...body }` and the headers
