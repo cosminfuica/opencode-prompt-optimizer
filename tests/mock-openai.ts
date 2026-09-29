@@ -2,6 +2,7 @@
 //   optimizer calls (last user msg has <original_prompt>) -> <optimized_prompt>OPTIMIZED#<n>: <original></optimized_prompt>
 //   judge calls (last user msg has <candidate ...>)        -> picks the LAST candidate
 //   anything else (the target chat model, titles)          -> "MOCK REPLY"
+// `slowMs` delays the optimizer and judge replies.
 // Every request is appended to `log` as one JSON line: {path, auth, body}.
 // CLI: bun tests/mock-openai.ts [port=4010] [logfile]
 import { appendFileSync } from "node:fs"
@@ -9,7 +10,7 @@ import { appendFileSync } from "node:fs"
 const text = (c: any): string =>
   typeof c === "string" ? c : Array.isArray(c) ? c.map((p: any) => p?.text ?? "").join("") : ""
 
-export function startMock(opts: { port?: number; log?: string; fail?: (body: any) => boolean } = {}) {
+export function startMock(opts: { port?: number; log?: string; fail?: (body: any) => boolean; slowMs?: number } = {}) {
   let n = 0
   return Bun.serve({
     port: opts.port ?? 0,
@@ -28,6 +29,7 @@ export function startMock(opts: { port?: number; log?: string; fail?: (body: any
       if (/<candidate\b/.test(lastUser))
         content = `<reason>mock judge picked the last one</reason>\n<best>${lastUser.match(/<candidate\b/g)!.length}</best>`
       else if (orig) content = `<optimized_prompt>\nOPTIMIZED#${++n}: ${orig[1]}\n</optimized_prompt>`
+      if (opts.slowMs && content !== "MOCK REPLY") await Bun.sleep(opts.slowMs)
 
       const usage = { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }
       if (!body.stream)
