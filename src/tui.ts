@@ -75,7 +75,7 @@ function openDialog(api: TuiPluginApi, solid: Solid | undefined, title: string, 
       { key: "home", cmd: () => box?.scrollTo(0) }, { key: "end", cmd: () => box?.scrollTo(box.scrollHeight) },
       { key: "return", cmd: close },
     ],
-  } as any)
+  })
 }
 
 function show(api: TuiPluginApi, solid?: Solid) {
@@ -116,7 +116,7 @@ const tui: TuiPlugin = async (api) => {
           commands: [
             { name: NAME, title: TITLE, category: CATEGORY, namespace: "palette", slashName: "optimized", run: () => show(api, solid) },
           ],
-        } as any)
+        })
       : api.command?.register(() => [
           { title: TITLE, value: NAME, category: CATEGORY, slash: { name: "optimized" }, onSelect: () => show(api, solid) },
         ])
