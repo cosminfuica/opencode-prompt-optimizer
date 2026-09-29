@@ -178,7 +178,6 @@ export interface Config {
   toast: boolean
   prompts: Record<string, string>   // resolved TEXT, insertion order kept
   judgePrompt: string               // resolved text
-  path?: string                     // file used; undefined => defaults
 }
 export interface LoadOptions { builtinDir?: string; env?: Record<string, string | undefined>; options?: Record<string, unknown> }
 export function configPath(env?: Record<string, string | undefined>): string

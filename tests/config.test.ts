@@ -23,7 +23,6 @@ describe("loadConfig", () => {
   test("missing file => defaults with built-in prompts", async () => {
     const cfg = await loadConfig(join(tmp, "nope.jsonc"), { builtinDir, env: {} })
     expect(cfg).toMatchObject({ enabled: true, turns: 1, strategy: "parallel", timeoutMs: 60000, minChars: 20, toast: true, headers: {}, body: {} })
-    expect(cfg.path).toBeUndefined()
     expect(cfg.model).toBeUndefined()
     expect(cfg.skipPatterns.map((r) => r.source)).toEqual(["<!--\\s*OMO_INTERNAL", "^\\s*\\[SYSTEM DIRECTIVE", "^/[\\w.-]+(\\s|$)"].map((s) => new RegExp(s).source))
     expect(Object.keys(cfg.prompts)).toEqual(["*claude*", "*gpt*", "*gemini*", "default"])
@@ -48,7 +47,6 @@ describe("loadConfig", () => {
   test("JSONC comments + trailing commas, unknown keys ignored", async () => {
     const p = write(`// top\n{\n  /* block */ "turns": 3, // three\n  "strategy": "refine",\n  "whatever": 1,\n  "prompts": { "*x*": "X", "default": "D", },\n  "judgePrompt": "J",\n}\n`)
     const cfg = await loadConfig(p, { builtinDir, env: {} })
-    expect(cfg.path).toBe(p)
     expect(cfg.turns).toBe(3)
     expect(cfg.strategy).toBe("refine")
     expect(cfg.prompts).toEqual({ "*x*": "X", default: "D" })
@@ -64,7 +62,6 @@ describe("loadConfig", () => {
     const options = { model: "p/opt", turns: 3, toast: false }
     const only = await loadConfig(join(tmp, "nope.jsonc"), { builtinDir, env: {}, options })
     expect(only).toMatchObject({ model: "p/opt", turns: 3, toast: false, enabled: true })
-    expect(only.path).toBeUndefined()
     const both = await loadConfig(write(`{"turns": 2}`), { builtinDir, env: {}, options })
     expect(both).toMatchObject({ model: "p/opt", turns: 2, toast: false })
     await expect(loadConfig(join(tmp, "nope.jsonc"), { builtinDir, env: {}, options: { turns: 0 } }))
@@ -176,7 +173,6 @@ describe("configPath", () => {
     const p = write(`{"turns": 2}`)
     const cfg = await loadConfig(undefined, { builtinDir, env: { OPENCODE_PROMPT_OPTIMIZER_CONFIG: p } })
     expect(cfg.turns).toBe(2)
-    expect(cfg.path).toBe(p)
   })
 })
 

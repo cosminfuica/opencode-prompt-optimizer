@@ -10,7 +10,6 @@ export interface Config {
   toast: boolean
   prompts: Record<string, string>   // resolved TEXT, insertion order kept
   judgePrompt: string               // resolved text
-  path?: string                     // file used; undefined => defaults
 }
 export interface LoadOptions {
   builtinDir?: string; env?: Record<string, string | undefined>
@@ -110,7 +109,6 @@ export async function loadConfig(path?: string, opts: LoadOptions = {}): Promise
     toast: bool("toast", true),
     prompts,
     judgePrompt: str("judgePrompt") ?? builtin("judge.md"),
-    path: exists ? file : undefined,
   }
 }
 
