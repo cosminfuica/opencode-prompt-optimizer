@@ -225,8 +225,10 @@ resolveEndpoint:
 - Otherwise: `ref = cfg.model ?? (await client.config.get()).data?.small_model`, then split
   at the first "/" into providerID and modelKey. Look up the provider and the model
   in `client.config.providers()`. Then:
-  - `baseURL = provider.options?.baseURL || model.api?.url || KNOWN[model.api?.npm]` (opencode's order: a
-    user's `baseURL` override wins over the models.dev URL), with:
+  - `baseURL = provider.options?.baseURL || <catalogue url> || KNOWN[npm]` (opencode's order: a user's
+    `baseURL` override wins over the models.dev URL). `npm` is `model.api?.npm`, defaulting to
+    `@ai-sdk/openai-compatible` as in opencode. `<catalogue url>` is `model.api?.url`, used only when `npm` is
+    `@ai-sdk/openai-compatible` or a KNOWN package; other packages' URLs don't speak the OpenAI chat API. With:
     ```
     KNOWN = { "@ai-sdk/openai": "https://api.openai.com/v1",
       "@ai-sdk/anthropic": "https://api.anthropic.com/v1",
@@ -245,14 +247,17 @@ resolveEndpoint:
     e.g. `claude-sonnet-5-fast` has api.id `claude-sonnet-5(none)`.
   - `headers = { ...provider.options?.headers, ...cfg.headers }`
   - If anything is missing, throw a readable Error that says what to set, e.g.
-    `optimizer model "x/y" not found in opencode providers` or
-    `no baseURL for provider "x" — set "baseURL" in the plugin config`.
+    `optimizer model "x/y" not found in opencode providers — see \`opencode models\`; …` or
+    `no OpenAI-compatible baseURL for provider "x" — set "baseURL" in the plugin config`. A URL that still
+    contains `${VAR}` (opencode fills these in; the plugin doesn't) throws
+    `provider "x" has a templated URL (…) — set "baseURL" in the plugin config`.
 
 chat: POST `${baseURL without trailing /}/chat/completions` with the JSON
 `{ ...body, model, messages, stream: false }` (so `body` can't override those three) and the headers
 `Content-Type: application/json`, `Authorization: Bearer <apiKey>` (only if apiKey), and `...headers`.
-Use `AbortSignal.timeout(timeoutMs)`. A non-2xx response throws an Error with the
-status and a snippet of the body. `choices[0].finish_reason === "length"` throws: the
+Use `AbortSignal.timeout(timeoutMs)`; it also covers reading the body. A non-2xx response throws an Error with
+the status and a snippet of the body; a 404 adds a hint that there's no OpenAI-compatible chat API at that URL.
+A 200 that isn't JSON throws `optimizer endpoint returned non-JSON (…); is "baseURL" the …/v1 API root?`. `choices[0].finish_reason === "length"` throws: the
 reply was cut off, so the message says to raise `max_tokens`. Content is `choices[0].message.content` (a string,
 or an array of `{text}` pieces). Strip a leading `<think>…</think>` block and trim; a `<think>` quoted
 inside the answer stays. Empty content throws.

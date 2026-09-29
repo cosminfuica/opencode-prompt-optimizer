@@ -43,8 +43,12 @@ export async function resolveEndpoint(
   const model = provider?.models?.[modelKey]
   if (!provider || !model) throw new Error(`optimizer model "${ref}" not found in opencode providers — see \`opencode models\`; OAuth/subscription logins can't be the optimizer`)
 
-  const baseURL = provider.options?.baseURL || model.api?.url || KNOWN[model.api?.npm ?? ""]
-  if (!baseURL) throw new Error(`no baseURL for provider "${providerID}" — set "baseURL" in the plugin config`)
+  const npm = model.api?.npm ?? "@ai-sdk/openai-compatible"  // opencode's default too
+  // a catalogue URL speaks OpenAI chat only for these packages (not e.g. @ai-sdk/amazon-bedrock/mantle)
+  const catalogueURL = npm === "@ai-sdk/openai-compatible" || KNOWN[npm] ? model.api?.url : undefined
+  const baseURL = provider.options?.baseURL || catalogueURL || KNOWN[npm]
+  if (!baseURL) throw new Error(`no OpenAI-compatible baseURL for provider "${providerID}" — set "baseURL" in the plugin config`)
+  if (baseURL.includes("${")) throw new Error(`provider "${providerID}" has a templated URL (${baseURL}) — set "baseURL" in the plugin config`)
   // ponytail: env-name heuristic (models.dev also lists IDs/regions; a SigV4 secret isn't a bearer token);
   // map key vars per provider if one ever ends in something else
   const envKey = provider.env?.filter((n) => /(KEY|TOKEN|PAT)$/i.test(n) && !/SECRET/i.test(n)).map((n) => process.env[n]).find(Boolean)
@@ -82,7 +86,8 @@ export async function chat(
   }
   if (!res.ok) {
     const text = await res.text().catch(() => "")
-    throw new Error(`optimizer endpoint returned HTTP ${res.status}: ${text.slice(0, 200)}`)
+    const hint = res.status === 404 ? ` (no OpenAI-compatible chat API at ${url}? set "baseURL" in the plugin config)` : ""
+    throw new Error(`optimizer endpoint returned HTTP ${res.status}: ${text.slice(0, 200)}${hint}`)
   }
   let payload: string
   try { payload = await res.text() } catch (e) { throw failed(e) }  // the timeout also covers a body that stalls

@@ -310,7 +310,7 @@ describe("resolveEndpoint", () => {
     await expect(resolveEndpoint(cfg(), client())).rejects.toThrow('set "model" in the plugin config')
     await expect(resolveEndpoint(cfg({ model: "nope/m" }), client())).rejects.toThrow('"nope/m" not found in opencode providers — see `opencode models`; OAuth/subscription logins can\'t be the optimizer')
     await expect(resolveEndpoint(cfg({ model: "openai/missing" }), client())).rejects.toThrow("not found")
-    await expect(resolveEndpoint(cfg({ model: "nourl/m" }), client())).rejects.toThrow('no baseURL for provider "nourl" — set "baseURL" in the plugin config')
+    await expect(resolveEndpoint(cfg({ model: "nourl/m" }), client())).rejects.toThrow('no OpenAI-compatible baseURL for provider "nourl" — set "baseURL" in the plugin config')
     await expect(resolveEndpoint(cfg({ model: "bare" }), client())).rejects.toThrow('(or set "baseURL" in the plugin config)')
     await expect(resolveEndpoint(cfg({ baseURL: "http://x/v1" }), client())).rejects.toThrow('"model" is required when "baseURL" is set in the plugin config')
   })
@@ -365,6 +365,22 @@ describe("review regressions (REVIEW.md)", () => {
   test("M1: a user's options.baseURL wins over the catalogue api.url", async () => {
     const p = { id: "ds", env: ["DS_KEY"], options: { baseURL: "https://gateway.example/v1" }, models: { m: { id: "m", api: { url: "https://api.vendor.example" } } } }
     expect((await endpoint("ds/m", [p])).baseURL).toBe("https://gateway.example/v1")
+  })
+
+  test("P2-5: templated URLs and catalogue URLs of non-OpenAI packages give a clear error; a user baseURL still wins", async () => {
+    const cf = { id: "cf", env: [], options: {}, models: { m: { id: "m", api: { url: "https://x.example/accounts/${ACCOUNT_ID}/v1", npm: "@ai-sdk/openai-compatible" } } } }
+    await expect(endpoint("cf/m", [cf])).rejects.toThrow('provider "cf" has a templated URL (https://x.example/accounts/${ACCOUNT_ID}/v1) — set "baseURL" in the plugin config')
+    const mg = { id: "mg", env: [], options: {}, models: { m: { id: "m", api: { url: "https://gw.example/v1/ai-sdk", npm: "some-ai-sdk-provider" } } } }
+    await expect(endpoint("mg/m", [mg])).rejects.toThrow('no OpenAI-compatible baseURL for provider "mg" — set "baseURL" in the plugin config')
+    expect((await endpoint("mg/m", [{ ...mg, options: { baseURL: "https://proxy.example/v1" } }])).baseURL).toBe("https://proxy.example/v1")
+  })
+
+  test("P2-5: HTTP 404 names the URL and says what to do", async () => {
+    const s = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => new Response("404 page not found", { status: 404 }) })
+    try {
+      await expect(chat({ baseURL: `${s.url.href}anthropic/v1`, model: "m" }, [{ role: "user", content: "x" }], { timeoutMs: 5000 }))
+        .rejects.toThrow(`optimizer endpoint returned HTTP 404: 404 page not found (no OpenAI-compatible chat API at ${s.url.href}anthropic/v1/chat/completions? set "baseURL" in the plugin config)`)
+    } finally { s.stop(true) }
   })
 
   test("M2: a key in any credential env var is found; IDs and SigV4 secrets are never sent", async () => {
