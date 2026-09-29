@@ -65,6 +65,11 @@ describe("chat", () => {
     expect(c.body).toEqual({ model: "mock", messages: user("hello"), stream: false, temperature: 0.2 })
   })
 
+  test("body can't override model, messages or stream", async () => {
+    await chat(ep, user("real prompt"), { timeoutMs: 5000, body: { model: "other", messages: [], stream: true, top_p: 0.5 } })
+    expect(calls()[0].body).toEqual({ model: "mock", messages: user("real prompt"), stream: false, top_p: 0.5 })
+  })
+
   test("Authorization header when apiKey is set", async () => {
     await chat({ ...ep, apiKey: "sk-test" }, user("hi"), { timeoutMs: 5000 })
     expect(calls()[0].auth).toBe("Bearer sk-test")

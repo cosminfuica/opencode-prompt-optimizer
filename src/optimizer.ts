@@ -71,7 +71,7 @@ export async function chat(
         ...(endpoint.apiKey ? { Authorization: `Bearer ${endpoint.apiKey}` } : {}),
         ...endpoint.headers,
       },
-      body: JSON.stringify({ model: endpoint.model, messages, stream: false, ...opts.body }),
+      body: JSON.stringify({ ...opts.body, model: endpoint.model, messages, stream: false }),
       signal: AbortSignal.timeout(opts.timeoutMs),
     })
   } catch (e: any) {

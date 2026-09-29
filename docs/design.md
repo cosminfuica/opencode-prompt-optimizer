@@ -249,7 +249,7 @@ resolveEndpoint:
     `no baseURL for provider "x" — set "baseURL" in the plugin config`.
 
 chat: POST `${baseURL without trailing /}/chat/completions` with the JSON
-`{ model, messages, stream: false, ...body }` and the headers
+`{ ...body, model, messages, stream: false }` (so `body` can't override those three) and the headers
 `Content-Type: application/json`, `Authorization: Bearer <apiKey>` (only if apiKey), and `...headers`.
 Use `AbortSignal.timeout(timeoutMs)`. A non-2xx response throws an Error with the
 status and a snippet of the body. `choices[0].finish_reason === "length"` throws: the
