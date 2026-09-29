@@ -10,7 +10,7 @@ It turns quick, messy messages into clear requests before your [OpenCode](https:
 Your chat keeps showing exactly what you typed.
 
 [![OpenCode plugin](https://img.shields.io/badge/OpenCode-plugin-7C6BC4?style=flat-square&labelColor=363262)](https://opencode.ai)
-[![npm package](https://img.shields.io/badge/npm-%40cosminfuica%2Fopencode--prompt--optimizer-7C6BC4?style=flat-square&labelColor=363262)](https://www.npmjs.com/package/@cosminfuica/opencode-prompt-optimizer)
+[![GitHub repository](https://img.shields.io/badge/GitHub-cosminfuica%2Fopencode--prompt--optimizer-7C6BC4?style=flat-square&labelColor=363262)](https://github.com/cosminfuica/opencode-prompt-optimizer)
 [![Runtime dependencies: 0](https://img.shields.io/badge/dependencies-0-7C6BC4?style=flat-square&labelColor=363262)](package.json)
 [![License: MIT](https://img.shields.io/badge/license-MIT-7C6BC4?style=flat-square&labelColor=363262)](LICENSE)
 
@@ -85,27 +85,35 @@ leave an already-clear prompt essentially unchanged, and never do the task thems
 
 ## Quick start
 
-**1. Install it.** Let OpenCode add the plugin to both `opencode.json` and `tui.json`:
+**1. Install it.** The package isn't on npm yet, so install from a local build. `opencode plugin` adds the absolute
+path to both `opencode.json` and `tui.json`:
 
 ```sh
+git clone https://github.com/cosminfuica/opencode-prompt-optimizer.git
+cd opencode-prompt-optimizer
+bun install && bun run build
 # drop -g to install for the current project only
-opencode plugin @cosminfuica/opencode-prompt-optimizer -g
+opencode plugin "$PWD" -g
 ```
 
 <details>
 <summary>Or edit the config files yourself</summary>
 
-Add the plugin to `opencode.json`, either the global `~/.config/opencode/opencode.json` or the one in your project.
-OpenCode installs it from npm the next time it starts.
+Put the absolute path of your checkout in `plugin` in `opencode.json`, either the global
+`~/.config/opencode/opencode.json` or the one in your project:
 
 ```json
 {
-  "plugin": ["@cosminfuica/opencode-prompt-optimizer"]
+  "plugin": ["/absolute/path/to/opencode-prompt-optimizer"]
 }
 ```
 
 Then add the same entry to the `tui.json` next to it (`~/.config/opencode/tui.json` for the global setup). That entry
 adds the `/optimized` command.
+
+Once `@cosminfuica/opencode-prompt-optimizer` is published on npm, `opencode plugin @cosminfuica/opencode-prompt-optimizer -g`
+and the npm name in both files will work too. The unscoped `opencode-prompt-optimizer` package on npm is a different
+project.
 
 </details>
 
@@ -228,18 +236,20 @@ Every setting is optional. Most people only set `model`. There are two places to
    `prompt-optimizer.json` works too). Set `$OPENCODE_PROMPT_OPTIMIZER_CONFIG` to use another path. The file is
    JSONC, so comments and trailing commas are allowed. It's re-read on every message, so edits apply without a
    restart.
-2. **Plugin options** in `opencode.json`, read when OpenCode starts:
+2. **Plugin options** in `opencode.json`, read when OpenCode starts. The first element is the same `plugin` entry you
+   installed (your checkout's path until the package is on npm):
 
    ```json
    {
      "plugin": [
-       ["@cosminfuica/opencode-prompt-optimizer", { "model": "openai/gpt-5-mini", "turns": 2 }]
+       ["/absolute/path/to/opencode-prompt-optimizer", { "model": "openai/gpt-5-mini", "turns": 2 }]
      ]
    }
    ```
 
 Both accept the same keys and use the same validation. If both set a key, the config file wins for that top-level key.
-[`examples/`](examples/) has a fully commented `prompt-optimizer.jsonc`, plus `opencode.json` and `tui.json`.
+[`examples/`](examples/) has a fully commented `prompt-optimizer.jsonc`, plus `opencode.json` and `tui.json`; those two
+use the npm name, so swap in your checkout's path until the package is published.
 
 | Key | Default | Description |
 |---|---|---|
@@ -430,7 +440,8 @@ Set `"enabled": false` in `prompt-optimizer.jsonc`. It applies from the next mes
   `Optimizing with …` toast or a `prompt-optimizer:` log line. If there is none and you load a local checkout, check
   that the path in `plugin` exists and that you ran `bun run build` (OpenCode loads `dist/`).
 - **No `/optimized` command:** add the plugin to `tui.json` as well.
-- **Updating:** OpenCode keeps using its cached copy of an unpinned plugin. To update, pin a version
+- **Updating:** for a local checkout, run `git pull && bun run build` and restart OpenCode. Once the package is on
+  npm: OpenCode keeps using its cached copy of an unpinned plugin. To update, pin a version
   (`"@cosminfuica/opencode-prompt-optimizer@0.1.0"`) or delete
   `~/.cache/opencode/packages/@cosminfuica/opencode-prompt-optimizer@latest`, then restart OpenCode.
 - **Plugin order:** plugins run in the order of the `plugin` array. Some plugins edit the text of your message, for
