@@ -107,13 +107,11 @@ from `@opencode-ai/plugin`, which is therefore an optional peer dependency.
 
 ## Packaging and loading
 
-- npm: `"plugin": ["@cosminfuica/opencode-prompt-optimizer"]` in `opencode.json` loads the
-  server half via `exports["./server"]` (falling back to `main`). `tui.json` needs the same
-  entry for the TUI half: opencode reads TUI plugins only from `tui.json`, and only via
-  `exports["./tui"]`. `opencode plugin <name>` adds both entries.
-- opencode installs npm plugins with scripts disabled, so `dist/` is built at pack time
-  (`prepack`) and shipped with `prompts/` (see `files`).
-- Local checkout: `"plugin": ["/abs/path/to/repo"]` resolves through the same `package.json`.
+- `"plugin": ["/abs/path/to/repo"]` in `opencode.json` loads the server half through the
+  checkout's `package.json`, via `exports["./server"]` (falling back to `main`). `tui.json` needs
+  the same entry for the TUI half: opencode reads TUI plugins only from `tui.json`, and only via
+  `exports["./tui"]`. `opencode plugin <path>` adds both entries. Both point into `dist/`, which
+  isn't committed, so the checkout must be built first.
 - A server plugin module must export nothing but plugin functions: opencode calls every
   export. A TUI module must default-export `{ id, tui }` and must not also export `server`.
 
@@ -132,7 +130,7 @@ JSONC (comments + trailing commas), parsed with `Bun.JSONC.parse`. The file is
 re-read on every message, so edits apply live.
 
 The same keys can be given as plugin options in opencode.json
-(`["@cosminfuica/opencode-prompt-optimizer", { … }]`, the plugin function's second
+(`["/abs/path/to/repo", { … }]`, the plugin function's second
 argument). They are the base; top-level keys in the file replace them (shallow merge).
 Both go through the same validation. `"enabled": false` in either place (the file wins, as for any key)
 pauses the plugin even when other keys are invalid, and `{file:}` references in the file aren't read then;
