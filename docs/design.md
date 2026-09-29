@@ -344,16 +344,18 @@ export const PromptOptimizerPlugin: Plugin = async ({ client }, options) =>
 hooks.ts must use only `import type` from config.ts/optimizer.ts. Every runtime
 function arrives through `deps`, so hook tests need no other module.
 chat.message steps, in order. Wrap everything in try/catch. Never throw.
-1. If `command.execute.before` marked this sessionID: clear the mark and skip.
-   Slash-command templates are not optimized.
+1. If `command.execute.before` marked this sessionID less than 10 s ago: clear the mark and skip.
+   Slash-command templates are not optimized. An older mark (the command failed before its
+   message was built) is cleared and ignored.
 2. `cfg = await loadConfig()`. On error: warning toast (the message), log, skip.
    If `!cfg.enabled`, skip.
 3. `userParts` = text parts with `!synthetic && !ignored`. `text` = their texts joined
    by "\n\n", then trimmed. Skip if empty, if `text.length < cfg.minChars`, or if any
    skipPattern matches.
 4. Skip child sessions (subagents/task tool): `client.session.get` returns a
-   `parentID`. Cache the result per sessionID. If the lookup fails, treat the
-   session as not a child.
+   `parentID`. Cache the result per sessionID, only when the lookup returned `data`. If the
+   lookup throws or returns `{ error }` (opencode's client doesn't throw on HTTP errors), treat
+   the session as not a child and look it up again next time.
 5. `target = output.message.model ?? input.model` (both `{providerID, modelID}`), as the string `"p/m"`.
 6. `endpoint = await resolveEndpoint(cfg, client)`. If `cfg.toast`, show an info toast:
    title "Prompt optimizer", message `Optimizing with <endpoint.model>…`, and
@@ -372,8 +374,8 @@ Logging goes through `client.app.log` with service "@cosminfuica/opencode-prompt
 starts with "prompt-optimizer: " because opencode drops the service field from its log lines. Never log apiKey.
 Toast/log failures are swallowed.
 
-`command.execute.before({sessionID})`: record `sessionID` in a Set of pending
-slash-command runs. Step 1 above consumes it. Slash commands arrive as rendered
+`command.execute.before({sessionID})`: record `sessionID` with the current time in a Map of
+pending slash-command runs. Step 1 above consumes it. Slash commands arrive as rendered
 templates; optimizing them would be surprising.
 
 `experimental.chat.messages.transform`: exactly as described in "How it works".
