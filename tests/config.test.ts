@@ -68,6 +68,21 @@ describe("loadConfig", () => {
       .rejects.toThrow(`prompt-optimizer config plugin options: "turns" must be an integer 1..8`)
   })
 
+  test(`"enabled": false wins over errors in other keys, from the file or the plugin options`, async () => {
+    const off = await loadConfig(write(`{"enabled": false, "turns": 0}`), { builtinDir, env: {} })
+    expect(off.enabled).toBe(false)
+    // review probe P7: plugin options only
+    const optsOff = await loadConfig(join(tmp, "nope.jsonc"), { builtinDir, env: {}, options: { enabled: false, turns: 0 } })
+    expect(optsOff.enabled).toBe(false)
+    const fileOff = await loadConfig(write(`{"enabled": false}`), { builtinDir, env: {}, options: { turns: 0, skipPatterns: ["("] } })
+    expect(fileOff.enabled).toBe(false)
+    const missingFile = await loadConfig(write(`{"judgePrompt": "{file:./missing.md}"}`), { builtinDir, env: {}, options: { enabled: false } })
+    expect(missingFile.enabled).toBe(false)
+    // a broken file still has to be readable to know it says "enabled": false
+    await expect(loadConfig(write(`{"enabled": false, "turns": }`), { builtinDir, env: {} })).rejects.toThrow("invalid JSONC")
+    await expect(loadConfig(write(`{"enabled": "no"}`), { builtinDir, env: {} })).rejects.toThrow(`"enabled" must be a boolean`)
+  })
+
   test("repo example prompt-optimizer.jsonc parses (built-in prompts)", async () => {
     const p = write(readFileSync(join(import.meta.dir, "../examples/prompt-optimizer.jsonc"), "utf8"))
     const cfg = await loadConfig(p, { builtinDir, env: {} })

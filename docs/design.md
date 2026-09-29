@@ -134,7 +134,9 @@ re-read on every message, so edits apply live.
 The same keys can be given as plugin options in opencode.json
 (`["@cosminfuica/opencode-prompt-optimizer", { … }]`, the plugin function's second
 argument). They are the base; top-level keys in the file replace them (shallow merge).
-Both go through the same validation.
+Both go through the same validation. `"enabled": false` in either place (the file wins, as for any key)
+pauses the plugin even when other keys are invalid, and `{file:}` references in the file aren't read then;
+only invalid JSONC or a non-boolean `enabled` still produce an error.
 
 | key | type | default | notes |
 |---|---|---|---|
