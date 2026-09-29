@@ -102,6 +102,23 @@ describe("chat", () => {
         .rejects.toThrow("optimizer request timed out after 200ms")
     } finally { s.stop(true) }
   })
+
+  test("a 200 that isn't JSON, and a body that stalls past the timeout, give readable errors", async () => {
+    const html = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => new Response("<!doctype html>\n<html>LM Studio</html>", { headers: { "content-type": "text/html" } }) })
+    const stall = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => new Response(new ReadableStream({
+      async start(c) {
+        c.enqueue(new TextEncoder().encode('{"choices":['))
+        await Bun.sleep(1500)
+        try { c.enqueue(new TextEncoder().encode("]}")); c.close() } catch {}
+      },
+    }), { headers: { "content-type": "application/json" } }) })
+    try {
+      await expect(chat({ baseURL: html.url.href, model: "m" }, user("x"), { timeoutMs: 5000 }))
+        .rejects.toThrow('optimizer endpoint returned non-JSON ("<!doctype html> <html>LM Studio</html>"); is "baseURL" the …/v1 API root?')
+      await expect(chat({ baseURL: stall.url.href, model: "m" }, user("x"), { timeoutMs: 300 }))
+        .rejects.toThrow("optimizer request timed out after 300ms")
+    } finally { html.stop(true); stall.stop(true) }
+  })
 })
 
 describe("optimize", () => {

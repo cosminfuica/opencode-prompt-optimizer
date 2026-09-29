@@ -62,6 +62,9 @@ export async function chat(
   opts: { timeoutMs: number; body?: Record<string, unknown> },
 ): Promise<string> {
   const url = `${endpoint.baseURL.replace(/\/+$/, "")}/chat/completions`
+  const failed = (e: any) => e?.name === "TimeoutError" || e?.name === "AbortError"
+    ? new Error(`optimizer request timed out after ${opts.timeoutMs}ms`)
+    : new Error(`optimizer request to ${url} failed: ${e?.message ?? e}`)
   let res: Response
   try {
     res = await fetch(url, {
@@ -74,16 +77,20 @@ export async function chat(
       body: JSON.stringify({ ...opts.body, model: endpoint.model, messages, stream: false }),
       signal: AbortSignal.timeout(opts.timeoutMs),
     })
-  } catch (e: any) {
-    if (e?.name === "TimeoutError" || e?.name === "AbortError")
-      throw new Error(`optimizer request timed out after ${opts.timeoutMs}ms`)
-    throw new Error(`optimizer request to ${url} failed: ${e?.message ?? e}`)
+  } catch (e) {
+    throw failed(e)
   }
   if (!res.ok) {
     const text = await res.text().catch(() => "")
     throw new Error(`optimizer endpoint returned HTTP ${res.status}: ${text.slice(0, 200)}`)
   }
-  const data: any = await res.json()
+  let payload: string
+  try { payload = await res.text() } catch (e) { throw failed(e) }  // the timeout also covers a body that stalls
+  let data: any
+  try { data = JSON.parse(payload) } catch {
+    const t = payload.replace(/\s+/g, " ").trim()
+    throw new Error(`optimizer endpoint returned non-JSON ("${t.length > 100 ? t.slice(0, 100) + "…" : t}"); is "baseURL" the …/v1 API root?`)
+  }
   const choice = data?.choices?.[0]
   if (choice?.finish_reason === "length")
     throw new Error(`optimizer reply was cut off at the token limit; raise "max_tokens" (or "max_completion_tokens" for OpenAI reasoning models) under "body" in the plugin config`)
