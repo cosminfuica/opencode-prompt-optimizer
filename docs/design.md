@@ -363,7 +363,8 @@ chat.message steps, in order. Wrap everything in try/catch. Never throw.
 9. On any error in 6–8: parts stay untouched. Warning toast (always shown): title
    "Prompt optimizer", message `Sent your original prompt — <error.message>`,
    duration 6000. Log at warn level.
-Logging goes through `client.app.log` with service "@cosminfuica/opencode-prompt-optimizer". Never log apiKey.
+Logging goes through `client.app.log` with service "@cosminfuica/opencode-prompt-optimizer", and every message
+starts with "prompt-optimizer: " because opencode drops the service field from its log lines. Never log apiKey.
 Toast/log failures are swallowed.
 
 `command.execute.before({sessionID})`: record `sessionID` in a Set of pending

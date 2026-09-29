@@ -63,8 +63,9 @@ export function createHooks(deps: Deps): Pick<Hooks, "chat.message" | "command.e
 
   type ToastBody = Parameters<HookClient["tui"]["showToast"]>[0]["body"]
   const toast = (body: ToastBody) => quiet(() => client.tui.showToast({ body }))
+  // opencode drops `service` from its log lines, so the plugin name goes in the message too (README: grep prompt-optimizer)
   const log = (level: "debug" | "info" | "warn" | "error", message: string, extra?: Record<string, unknown>) =>
-    quiet(() => client.app.log({ body: { service: "@cosminfuica/opencode-prompt-optimizer", level, message, extra } }))
+    quiet(() => client.app.log({ body: { service: "@cosminfuica/opencode-prompt-optimizer", level, message: `prompt-optimizer: ${message}`, extra } }))
   const warn = (e: unknown) => {
     toast({ title: "Prompt optimizer", message: `Sent your original prompt — ${errMsg(e)}`, variant: "warning", duration: 6000 })
     log("warn", `optimization skipped: ${errMsg(e)}`)

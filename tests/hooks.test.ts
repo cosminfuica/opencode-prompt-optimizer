@@ -167,6 +167,21 @@ describe("chat.message", () => {
     expect(h.toasts.length).toBe(0)
   })
 
+  // opencode drops the `service` field from log lines, so the README's `grep prompt-optimizer` needs it in the text
+  test("every log message starts with the plugin name", async () => {
+    const logs = []
+    for (const o of [{}, { optimizeThrows: true }, { loadThrows: true }]) {
+      const h = setup(o)
+      await send(h, [text(LONG)])
+      logs.push(...h.logs)
+    }
+    const t = setup()
+    await t.hooks["experimental.chat.messages.transform"]!({}, { messages: null } as any)
+    logs.push(...t.logs)
+    expect(logs.map((l) => l.level).sort()).toEqual(["error", "info", "warn", "warn"])
+    for (const l of logs) expect(l.message).toStartWith("prompt-optimizer: ")
+  })
+
   test("never throws when toast/log throw", async () => {
     for (const o of [{}, { optimizeThrows: true }, { loadThrows: true }]) {
       const h = setup({ ...o, clientThrows: true })
