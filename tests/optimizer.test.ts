@@ -168,13 +168,13 @@ describe("optimize", () => {
     expect(await optimize({ ...base, turns: 3, strategy: "refine" })).toMatchObject({ chosen: 2, judged: false })
   })
 
-  test("judge reply without <best> uses first integer; out of range falls back", async () => {
+  test("judge reply without <best>: a bare integer is used; prose or out of range falls back", async () => {
     const s = Bun.serve({
       port: 0, hostname: "127.0.0.1",
       async fetch(req) {
         const b: any = await req.json()
         const judge = isJudge(b)
-        const content = judge ? (b.model === "oob" ? "<best>9</best>" : "I pick 2.") : "<optimized_prompt>c</optimized_prompt>"
+        const content = judge ? (b.model === "oob" ? "<best>9</best>" : b.model === "prose" ? "I pick 2." : " 2\n") : "<optimized_prompt>c</optimized_prompt>"
         return Response.json({ choices: [{ message: { content } }] })
       },
     })
@@ -182,6 +182,7 @@ describe("optimize", () => {
       const e = { baseURL: s.url.href, model: "m" }
       expect(await optimize({ ...base, endpoint: e, turns: 2 })).toMatchObject({ chosen: 1, judged: true })
       expect(await optimize({ ...base, endpoint: { ...e, model: "oob" }, turns: 2 })).toMatchObject({ chosen: 0, judged: false })
+      expect(await optimize({ ...base, endpoint: { ...e, model: "prose" }, turns: 2 })).toMatchObject({ chosen: 0, judged: false })
     } finally { s.stop(true) }
   })
 
@@ -288,5 +289,71 @@ describe("resolveEndpoint", () => {
     await expect(resolveEndpoint(cfg({ model: "nope/m" }), client())).rejects.toThrow('"nope/m" not found in opencode providers')
     await expect(resolveEndpoint(cfg({ model: "openai/missing" }), client())).rejects.toThrow("not found")
     await expect(resolveEndpoint(cfg({ model: "nourl/m" }), client())).rejects.toThrow('no baseURL for provider "nourl"')
+  })
+})
+
+describe("review regressions (REVIEW.md)", () => {
+  const O = "optimized_prompt"
+  const run = async (content: string) => {
+    const s = fixed(content)
+    try { return (await optimize({ endpoint: { baseURL: s.url.href, model: "m" }, system: "S", judgeSystem: "J", prompt: "p", target: "a/b", turns: 1, strategy: "parallel", timeoutMs: 5000 })).prompt }
+    finally { s.stop(true) }
+  }
+  const src = (providers: any[]) => ({ config: { get: async () => ({ data: {} }), providers: async () => ({ data: { providers } }) } }) as ProviderSource
+  const endpoint = (model: string, providers: any[]) => resolveEndpoint({ model, headers: {} }, src(providers))
+
+  test("M3 (P3): a rewrite that quotes the tag is kept whole", async () => {
+    const p3 = "In extractTag, handle replies like `<optimized_prompt>x</optimized_prompt>` correctly and add a test."
+    expect(await run(`<${O}>\n${p3}\n</${O}>`)).toBe(p3)
+  })
+
+  test("M3 (P8): <think> quoted inside the rewrite survives", async () => {
+    const p8 = "Make parseReply drop <think>...</think> blocks before JSON.parse."
+    expect(await run(`<${O}>\n${p8}\n</${O}>`)).toBe(p8)
+    expect(await run(`<think>plan</think>\n<${O}>${p8}</${O}>`)).toBe(p8)
+  })
+
+  test("M3 (runtime F5): a block inside a leading or trailing <think> is ignored", async () => {
+    expect(await run(`<${O}>RIGHT</${O}>\n<think>draft <${O}>WRONG</${O}></think>`)).toBe("RIGHT")
+    expect(extractTag(`<think>draft <${O}>WRONG</${O}></think>\n<${O}>RIGHT</${O}>`, O)).toBe("RIGHT")
+    expect(extractTag("<best>2</best><think>maybe <best>3</best></think>", "best")).toBe("2")
+  })
+
+  test("M3: a stray or unclosed <think> in chatter does not hide the answer", async () => {
+    expect(await run(`I dropped the <think> tag. <${O}>X</${O}>`)).toBe("X")
+    expect(await run(`reasoning</think>\n<${O}>X</${O}>`)).toBe("X")
+    expect(await run(`<${O}>X</${O}> <think>`)).toBe("X")
+  })
+
+  test("m3 (P5): numbers in judge prose never pick the winner, even after a mid-reply <think>", async () => {
+    for (const judge of ["Both keep the 2 file paths; the third one is clearly best.", "My analysis. <think>maybe 3</think> I prefer the second one."]) {
+      const s = Bun.serve({ port: 0, hostname: "127.0.0.1", async fetch(req) {
+        const content = isJudge(await req.json()) ? judge : `<${O}>cand</${O}>`
+        return Response.json({ choices: [{ message: { content } }] })
+      } })
+      try {
+        expect(await optimize({ endpoint: { baseURL: s.url.href, model: "m" }, system: "S", judgeSystem: "J", prompt: "p", target: "a/b", turns: 3, strategy: "parallel", timeoutMs: 5000 }))
+          .toMatchObject({ chosen: 0, judged: false })
+      } finally { s.stop(true) }
+    }
+  })
+
+  test("M1: a user's options.baseURL wins over the catalogue api.url", async () => {
+    const p = { id: "ds", env: ["DS_KEY"], options: { baseURL: "https://gateway.example/v1" }, models: { m: { id: "m", api: { url: "https://api.vendor.example" } } } }
+    expect((await endpoint("ds/m", [p])).baseURL).toBe("https://gateway.example/v1")
+  })
+
+  test("M2: a key in any credential env var is found; IDs and SigV4 secrets are never sent", async () => {
+    const g = { id: "g", env: ["PO_T_ACCOUNT_ID", "PO_T_API_KEY", "PO_T_ALT_API_KEY"], options: {}, models: { m: { id: "m", api: { url: "https://g.example/v1" } } } }
+    const b = { id: "b", env: ["PO_T_ACCESS_KEY_ID", "PO_T_SECRET_ACCESS_KEY"], options: { baseURL: "https://proxy.example/v1" }, models: { m: { id: "m" } } }
+    Object.assign(process.env, { PO_T_ACCOUNT_ID: "acct", PO_T_ALT_API_KEY: "alt-key", PO_T_ACCESS_KEY_ID: "id", PO_T_SECRET_ACCESS_KEY: "secret" })
+    try {
+      expect((await endpoint("g/m", [g])).apiKey).toBe("alt-key")
+      delete process.env.PO_T_ALT_API_KEY
+      expect((await endpoint("g/m", [g])).apiKey).toBeUndefined()
+      expect((await endpoint("b/m", [b])).apiKey).toBeUndefined()
+    } finally {
+      for (const k of ["PO_T_ACCOUNT_ID", "PO_T_ALT_API_KEY", "PO_T_ACCESS_KEY_ID", "PO_T_SECRET_ACCESS_KEY"]) delete process.env[k]
+    }
   })
 })

@@ -43,12 +43,14 @@ export async function resolveEndpoint(
   const model = provider?.models?.[modelKey]
   if (!provider || !model) throw new Error(`optimizer model "${ref}" not found in opencode providers`)
 
-  const baseURL = model.api?.url || provider.options?.baseURL || KNOWN[model.api?.npm ?? ""]
+  const baseURL = provider.options?.baseURL || model.api?.url || KNOWN[model.api?.npm ?? ""]
   if (!baseURL) throw new Error(`no baseURL for provider "${providerID}" — set "baseURL" in prompt-optimizer.jsonc`)
-  const envName = provider.env?.[0]
+  // ponytail: env-name heuristic (models.dev also lists IDs/regions; a SigV4 secret isn't a bearer token);
+  // map key vars per provider if one ever ends in something else
+  const envKey = provider.env?.filter((n) => /(KEY|TOKEN|PAT)$/i.test(n) && !/SECRET/i.test(n)).map((n) => process.env[n]).find(Boolean)
   return {
     baseURL,
-    apiKey: provider.key ?? provider.options?.apiKey ?? (envName ? process.env[envName] : undefined),
+    apiKey: provider.key ?? provider.options?.apiKey ?? envKey,
     model: model.api?.id || modelKey,
     headers: { ...provider.options?.headers, ...cfg.headers },
   }
@@ -87,15 +89,30 @@ export async function chat(
     throw new Error(`optimizer reply was cut off at the token limit; raise "max_tokens" under "body" in prompt-optimizer.jsonc`)
   const c = choice?.message?.content
   const raw = typeof c === "string" ? c : Array.isArray(c) ? c.map((p: any) => p?.text ?? "").join("") : ""
-  const content = raw.replace(/<think>[\s\S]*?<\/think>/g, "").trim()
+  const content = raw.replace(/^\s*<think>[\s\S]*?<\/think>/, "").trim()
   if (!content) throw new Error("optimizer model returned empty content")
   return content
 }
 
 export function extractTag(text: string, tag: string): string | undefined {
-  // last non-empty occurrence wins: models sometimes echo the format instructions or an empty tag pair
-  const all = [...text.matchAll(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, "g"))].map((m) => m[1]!.trim()).filter(Boolean)
-  return all.at(-1)
+  // last non-empty complete top-level block wins; a quoted copy of the tag inside a block stays text,
+  // and blocks inside a closed top-level <think>…</think> are ignored
+  // ponytail: a quoted, unpaired </tag> still ends the block early
+  const blocks: string[] = []
+  let depth = 0, start = 0, skipTo = 0
+  for (const m of text.matchAll(new RegExp(`<(/?)(think|${tag})>`, "g"))) {
+    if (m.index! < skipTo) continue
+    if (m[2] === "think") {
+      if (depth === 0 && !m[1]) {
+        const end = text.indexOf("</think>", m.index)
+        if (end >= 0) skipTo = end + 1
+      }
+      continue
+    }
+    if (!m[1]) { if (depth++ === 0) start = m.index! + m[0].length }
+    else if (depth > 0 && --depth === 0) blocks.push(text.slice(start, m.index).trim())
+  }
+  return blocks.filter(Boolean).at(-1)
 }
 
 const head = (prompt: string, target: string) =>
@@ -162,7 +179,7 @@ export async function optimize(input: OptimizeInput): Promise<OptimizeResult> {
       { role: "system", content: input.judgeSystem },
       { role: "user", content: buildJudgeMessage(input.prompt, input.target, candidates) },
     ], opts)
-    const k = Number(extractTag(reply, "best")?.match(/\d+/)?.[0] ?? reply.match(/\d+/)?.[0])
+    const k = Number(extractTag(reply, "best")?.match(/\d+/)?.[0] ?? reply.match(/^\s*(\d+)\s*$/)?.[1])
     if (Number.isInteger(k) && k >= 1 && k <= candidates.length) return done(k - 1, true)
   } catch {
     // judge failure: fall through to the strategy's default pick

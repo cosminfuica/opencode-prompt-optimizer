@@ -225,7 +225,8 @@ resolveEndpoint:
 - Otherwise: `ref = cfg.model ?? (await client.config.get()).data?.small_model`, then split
   at the first "/" into providerID and modelKey. Look up the provider and the model
   in `client.config.providers()`. Then:
-  - `baseURL = model.api?.url || provider.options?.baseURL || KNOWN[model.api?.npm]`, with:
+  - `baseURL = provider.options?.baseURL || model.api?.url || KNOWN[model.api?.npm]` (opencode's order: a
+    user's `baseURL` override wins over the models.dev URL), with:
     ```
     KNOWN = { "@ai-sdk/openai": "https://api.openai.com/v1",
       "@ai-sdk/anthropic": "https://api.anthropic.com/v1",
@@ -235,9 +236,11 @@ resolveEndpoint:
       "@ai-sdk/deepseek": "https://api.deepseek.com/v1", "@ai-sdk/xai": "https://api.x.ai/v1" }
     ```
     (Each of these vendors serves an OpenAI-compatible /chat/completions.)
-  - `apiKey = provider.key ?? provider.options?.apiKey ?? process.env[provider.env?.[0]]`.
-    OAuth-only logins have no key; the call then fails and the user gets the
-    original prompt plus a toast.
+  - `apiKey = provider.key ?? provider.options?.apiKey ?? <env key>`. opencode fills `provider.key` only when
+    the provider lists exactly one env var, so `<env key>` is the value of the first variable in `provider.env`
+    that is set and has a credential-style name (ending in KEY, TOKEN or PAT). Names containing SECRET are
+    skipped: a SigV4 secret isn't a bearer token. OAuth-only logins have no key; the call then fails and the
+    user gets the original prompt plus a toast.
   - `model = model.api?.id || modelKey`. The config key can differ from the API id,
     e.g. `claude-sonnet-5-fast` has api.id `claude-sonnet-5(none)`.
   - `headers = { ...provider.options?.headers, ...cfg.headers }`
@@ -251,13 +254,15 @@ chat: POST `${baseURL without trailing /}/chat/completions` with the JSON
 Use `AbortSignal.timeout(timeoutMs)`. A non-2xx response throws an Error with the
 status and a snippet of the body. `choices[0].finish_reason === "length"` throws: the
 reply was cut off, so the message says to raise `max_tokens`. Content is `choices[0].message.content` (a string,
-or an array of `{text}` pieces). Strip `<think>…</think>` blocks and trim. Empty
-content throws.
+or an array of `{text}` pieces). Strip a leading `<think>…</think>` block and trim; a `<think>` quoted
+inside the answer stays. Empty content throws.
 
 optimize:
 - The candidate call uses `[system: input.system, user: buildOptimizerMessage(prompt, target, previous?)]`.
-  The candidate is the last non-empty `<optimized_prompt>` block (`extractTag`). If there is none,
-  the call fails like any other error. The raw reply is never used as the prompt.
+  The candidate is the last non-empty, complete, top-level `<optimized_prompt>` block (`extractTag`).
+  `extractTag` pairs tags by nesting depth, so a quoted copy of the tag inside the block stays text, and it
+  ignores blocks inside a closed top-level `<think>…</think>`. If there is no block, the call fails like any
+  other error. The raw reply is never used as the prompt.
 - turns = 1 makes one call.
 - strategy "parallel", turns = N: run N independent calls in parallel
   (`Promise.allSettled`, no `previous`) and keep the successes in input order.
@@ -268,8 +273,8 @@ optimize:
   - 0 successes: throw with the first error.
   - 1 success: use it (`judged = false`).
   - 2 or more: one judge call with `[system: judgeSystem, user: buildJudgeMessage(prompt, target, candidates)]`.
-    Parse `<best>k</best>` (1-based). If that fails, use the first integer in the
-    reply. If the judge fails or k is out of range, use the LAST candidate for
+    Parse `<best>k</best>` (1-based). If that fails, accept a reply that is only an
+    integer; numbers in prose never count. If the judge fails or k is out of range, use the LAST candidate for
     "refine" and candidate 1 for "parallel". `judged` is true only when the judge's
     answer was used.
 
