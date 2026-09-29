@@ -116,14 +116,17 @@ adds the `/optimized` command.
 { "model": "openai/gpt-5-mini" }
 ```
 
-A `"provider/model"` from your OpenCode config reuses that provider's key. Local and custom endpoints work too, see
+A `"provider/model"` from your OpenCode config reuses that provider's API key, including a key saved with
+`opencode auth login`. The provider must use an API key: OAuth and subscription logins (such as ChatGPT or Claude Pro)
+can't be the optimizer, and show up as "not found in opencode providers". Local and custom endpoints work too, see
 [Choosing the optimizer model](#choosing-the-optimizer-model).
 
-**3. Chat as usual.** For each message, a toast shows `Optimizing with <model>…`, then `✨ Prompt optimized` previews
-the result. The model gets the rewrite. Your chat shows what you typed. Set `"toast": false` to hide these two toasts.
+**3. Chat as usual.** For each message, a toast shows `Optimizing with <model>…`, then a success toast previews the
+rewrite (titled `✨ Prompt optimized`; on the first message of a session OpenCode may show only the preview). The model
+gets the rewrite. Your chat shows what you typed. Set `"toast": false` to hide these two toasts.
 
-**Requirements:** OpenCode (tested with 1.18.32), and an optimizer model reachable through an OpenAI-compatible
-`/chat/completions` API. OAuth and subscription logins, which have no API key, can't be used as the optimizer.
+**Requirements:** OpenCode (tested with 1.18.33), and an optimizer model reachable through an OpenAI-compatible
+`/chat/completions` API with an API key.
 
 ### See what was sent
 
@@ -165,10 +168,11 @@ These messages go to the model unchanged, with no toast:
 - slash commands
 - messages in subagent (task) sessions
 - messages that match `skipPatterns`, which by default cover other plugins' automated prompts and text that starts
-  like a slash command
+  like a slash command (this includes a message that starts with a one-segment path such as `/etc …`; `/tmp/x.txt …`
+  is still optimized)
 
 To pause the optimizer, set `"enabled": false` in `prompt-optimizer.jsonc`. It applies from the next message, with no
-restart.
+restart, and it also silences warnings about invalid values in other settings.
 
 <details>
 <summary><b>Under the hood</b>: hooks, files and what gets published</summary>
@@ -192,7 +196,8 @@ that metadata from the session and shows it. It only displays the prompt. Nothin
 
 Each hook catches its own errors, so a failure never blocks your message. Your original prompt goes through instead.
 If the transform hook ever stops running (for example after an OpenCode API change), the model gets both your original
-and the optimized text. That's degraded, not broken.
+and the optimized text. That's degraded, not broken. OpenCode's session-title request skips the transform hook, so
+the model that writes the title sees both your first message and its rewrite. That costs a few tokens and nothing else.
 
 ```text
 .
@@ -243,7 +248,7 @@ Both accept the same keys and use the same validation. If both set a key, the co
 | `baseURL` | none | A custom OpenAI-compatible endpoint (`…/v1`). Requires `model`. |
 | `apiKey` | none | API key for `baseURL`, ignored without it. OpenCode's provider keys are never sent to a custom `baseURL`. |
 | `headers` | `{}` | Extra HTTP headers for optimizer requests. |
-| `body` | `{}` | Extra request-body fields for every call, e.g. `temperature`, `max_tokens`, `reasoning_effort`. |
+| `body` | `{}` | Extra request-body fields for every call, e.g. `temperature`, `max_tokens`, `reasoning_effort`. It can't override `model`, `messages` or `stream`. |
 | `turns` | `1` | Rewrite calls per message, 1 to 8. With N > 1, one more judge call picks the best: N + 1 calls in total. |
 | `strategy` | `"parallel"` | How the N calls run: `"parallel"` makes N independent rewrites at once, `"refine"` makes them one after another, each improving the previous one. |
 | `timeoutMs` | `60000` | Timeout for each request, in milliseconds (at least 1000). |
@@ -254,7 +259,8 @@ Both accept the same keys and use the same validation. If both set a key, the co
 | `judgePrompt` | `prompts/judge.md` | System prompt for the judge call. |
 
 Any string in the config file can use `{env:VAR}` and `{file:path}`. The path is relative to the config file, and
-`~/` means your home directory. `opencode.json` supports the same syntax.
+`~/` means your home directory. `opencode.json` supports the same syntax. This includes the regexes in
+`skipPatterns`, so a pattern that contains `{env:…}` or `{file:…}` is expanded, not matched literally.
 
 A config error never blocks your message: your original prompt is sent, and a warning toast names the problem.
 
@@ -267,14 +273,17 @@ The default `skipPatterns` skip other plugins' automated prompts and text that s
 
 ### Choosing the optimizer model
 
-A `"provider/model"` from your OpenCode config reuses that provider's base URL, API key and headers:
+A `"provider/model"` from your OpenCode config reuses that provider's base URL, API key and headers. A `baseURL` you
+set for the provider in `opencode.json` wins over the catalogue URL, as it does in OpenCode:
 
 ```jsonc
 { "model": "openai/gpt-5-mini" }
 ```
 
 This works for providers with an OpenAI-compatible chat API: `@ai-sdk/openai-compatible` providers with a `baseURL`,
-OpenAI, Anthropic, Google, OpenRouter, Groq, Mistral, DeepSeek and xAI. For anything else, set a custom endpoint:
+OpenAI, Anthropic, Google, OpenRouter, Groq, Mistral, DeepSeek and xAI. For a provider with several key variables,
+such as Google, whichever one is set is used. Providers with an Anthropic-format URL (for example MiniMax's coding
+plans) or a URL with a `${VAR}` placeholder need a custom `baseURL`. So does anything else:
 
 ```jsonc
 // OpenRouter
@@ -287,7 +296,7 @@ OpenAI, Anthropic, Google, OpenRouter, Groq, Mistral, DeepSeek and xAI. For anyt
 ```
 
 ```jsonc
-// LM Studio
+// LM Studio ("max_completion_tokens" instead of "max_tokens" for OpenAI reasoning models)
 { "baseURL": "http://localhost:1234/v1", "model": "qwen2.5-7b-instruct", "body": { "temperature": 0.3, "max_tokens": 2048 } }
 ```
 
@@ -409,14 +418,17 @@ Set `"enabled": false` in `prompt-optimizer.jsonc`. It applies from the next mes
 
 ## Troubleshooting
 
-- **Logs:** OpenCode writes them to `~/.local/share/opencode/log/`. Run `opencode --print-logs` to see them live.
-  `grep prompt-optimizer ~/.local/share/opencode/log/*.log` finds this plugin's entries. Failures are logged at WARN.
+- **Logs:** OpenCode writes them to `~/.local/share/opencode/log/` (`opencode debug paths` shows the folder). Run
+  `opencode --print-logs` to see them live. `grep prompt-optimizer ~/.local/share/opencode/log/*.log` finds this
+  plugin's entries. Failures are logged at WARN.
 - **A "Sent your original prompt — …" toast** means the optimizer failed and your original went through. The toast
-  says why, for example: no optimizer model is set, the model wasn't found, there's no base URL, an HTTP error, a
-  timeout, a reply cut off at `max_tokens` (raise it in `body`), a reply with no `<optimized_prompt>` block, or an
-  invalid config.
-- **Plugin not loading:** run `opencode --print-logs --log-level INFO` and look for `failed to load plugin`.
-  `opencode debug config` shows the resolved `plugin` list.
+  says why, for example: no optimizer model is set, the model wasn't found (or is an OAuth login), there's no base
+  URL, an HTTP error, a timeout, a reply cut off at `max_tokens` (raise it, or `max_completion_tokens` for OpenAI
+  reasoning models, in `body`), a reply with no `<optimized_prompt>` block, or an invalid config.
+- **Plugin not loading:** `opencode debug config` shows the resolved `plugin` list. OpenCode doesn't log every plugin
+  that fails to load, so check for the plugin's own activity instead: send a message of 20+ characters and look for an
+  `Optimizing with …` toast or a `prompt-optimizer:` log line. If there is none and you load a local checkout, check
+  that the path in `plugin` exists and that you ran `bun run build` (OpenCode loads `dist/`).
 - **No `/optimized` command:** add the plugin to `tui.json` as well.
 - **Updating:** OpenCode keeps using its cached copy of an unpinned plugin. To update, pin a version
   (`"@cosminfuica/opencode-prompt-optimizer@0.1.0"`) or delete
