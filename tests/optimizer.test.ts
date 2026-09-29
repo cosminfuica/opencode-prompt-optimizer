@@ -286,7 +286,7 @@ describe("resolveEndpoint", () => {
 
   test("readable errors", async () => {
     await expect(resolveEndpoint(cfg(), client())).rejects.toThrow('set "model" in the plugin config')
-    await expect(resolveEndpoint(cfg({ model: "nope/m" }), client())).rejects.toThrow('"nope/m" not found in opencode providers')
+    await expect(resolveEndpoint(cfg({ model: "nope/m" }), client())).rejects.toThrow('"nope/m" not found in opencode providers — see `opencode models`; OAuth/subscription logins can\'t be the optimizer')
     await expect(resolveEndpoint(cfg({ model: "openai/missing" }), client())).rejects.toThrow("not found")
     await expect(resolveEndpoint(cfg({ model: "nourl/m" }), client())).rejects.toThrow('no baseURL for provider "nourl" — set "baseURL" in the plugin config')
     await expect(resolveEndpoint(cfg({ model: "bare" }), client())).rejects.toThrow('(or set "baseURL" in the plugin config)')

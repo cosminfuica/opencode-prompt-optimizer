@@ -41,7 +41,7 @@ export async function resolveEndpoint(
   const providers = (await client.config.providers()).data?.providers ?? []
   const provider = providers.find((p) => p.id === providerID)
   const model = provider?.models?.[modelKey]
-  if (!provider || !model) throw new Error(`optimizer model "${ref}" not found in opencode providers`)
+  if (!provider || !model) throw new Error(`optimizer model "${ref}" not found in opencode providers — see \`opencode models\`; OAuth/subscription logins can't be the optimizer`)
 
   const baseURL = provider.options?.baseURL || model.api?.url || KNOWN[model.api?.npm ?? ""]
   if (!baseURL) throw new Error(`no baseURL for provider "${providerID}" — set "baseURL" in the plugin config`)
