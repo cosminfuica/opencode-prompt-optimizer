@@ -15,9 +15,7 @@ opencode-prompt-optimizer/
 ├── tests/             # bun unit tests + standalone e2e/TUI scripts; see tests/AGENTS.md
 ├── docs/design.md     # module contracts (the spec); README sends contributors here
 ├── examples/          # opencode.json, tui.json, prompt-optimizer.jsonc; parsed by tests/config.test.ts
-├── .github/readme/    # README media + BRIEF.md art direction; not shipped
-├── assets/            # legacy brand images + untracked readme/ redesign output; README uses neither
-└── .readme-redesign/  # untracked README-redesign scratch (own HyperFrames AGENTS.md); not plugin code
+└── .github/readme/    # README media + BRIEF.md art direction; not shipped
 ```
 
 ## WHERE TO LOOK
