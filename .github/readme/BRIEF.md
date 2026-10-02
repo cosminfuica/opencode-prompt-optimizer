@@ -13,9 +13,10 @@ string, palette, typefaces and motion constraints, and read the rounds below bef
 - **Voice:** friendly ("A little ghostwriter for your prompts."), careful ("The built-in prompts are careful."),
   unobtrusive ("Stays out of the way."). All three are quoted from the previous README.
 - **Existing brand:** `assets/logo.png` (a white ghost waving on a lavender tile), the hero, judge and star
-  illustrations in `assets/`, and the README's diagram colors `#B1A4D6` and `#363262`. Measured from the images:
-  lavender `#B1A4D6`, ghost white `#FDFCFB`, navy ink `#363262`, gold `#FECE6D`, cream card `#FEF7EC`. The old social
-  preview used Nunito, which the video skills list as an overused default, so the new direction does not reuse it.
+  illustrations in `assets/` (all since removed, see [Removed files](#removed-files)), and the README's diagram colors
+  `#B1A4D6` and `#363262`. Measured from the images: lavender `#B1A4D6`, ghost white `#FDFCFB`, navy ink `#363262`,
+  gold `#FECE6D`, cream card `#FEF7EC`. The old social preview used Nunito, which the video skills list as an overused
+  default, so the new direction does not reuse it.
 - **Visual references** (generation inputs live outside the repo, in the session's `readme-art/refs/`):
   - `ref-1-hero.png` (from `assets/hero.webp`): keep the lavender ground, the white ghost's proportions, the gold
     accents and the cream card.
@@ -105,14 +106,16 @@ Tagline contrast on the composed light banner: 8.5:1 at its darkest point (`#3D4
 
 No new generation. `banner.py --width 1280 --height 640` sets the name at 128 px, which ran across the ghost, so the
 preview is laid out in HTML from the accepted dark art with the same fonts (name 92 px on two lines, tagline 34 px) and
-captured at 1280x640. It is uploaded in the repository settings, not used in the README.
+captured at 1280x640. The README doesn't use it, and on 2026-10-02 the repository had no custom social preview set; see
+[Removed files](#removed-files).
 
 ### demo.mp4 and demo-poster.jpg (brag, full workflow)
 
 Tone `default`, "cozy stop-motion short", 1920x1080, 30 fps, 22.4 s, music `happy-beats-business-moves-vol-9`
-(bundled with brag) with quiet SFX. Built with Hyperframes 0.8.104; plan, brief and composition live in the ignored
-`brag-output/`. The hook and outro reuse the accepted dark banner art (cropped to 16:9); the middle scenes recreate the
-real OpenCode TUI in the BRIEF palette.
+(bundled with brag) with quiet SFX. Built with Hyperframes 0.8.104; plan, brief and composition lived in the ignored
+`brag-output/` (since removed). The hook and outro reuse the accepted dark banner art (cropped to 16:9); the middle
+scenes recreate the real OpenCode TUI in the BRIEF palette. Both files were later removed; see
+[Removed files](#removed-files).
 
 | Round | Change | Gate result | Verdict |
 |---|---|---|---|
@@ -133,3 +136,20 @@ Cut from the clip with the README recipe (0.8 s hold on a settled frame, then th
 | feature-1.gif | the rewrite toast | 3.85-9.45 s, hold 8.8 s | 12 | 1.29 MB | settled toast both ends (diff 0.16) |
 | feature-2.gif | `/optimized` dialog | 9.95-14.2 s, hold 13.2 s | 12 | 1.22 MB | settled dialog both ends (diff 0.08) |
 | feature-3.gif | drafts and the judge | 14.67-18.4 s, hold 17.6 s | 10 | 1.88 MB | settled pick both ends (diff 0.12); 12 fps was 2.1 MB |
+
+## Removed files
+
+Removed on 2026-10-02 because nothing in the repo used them. The README plays the clip from github.com/user-attachments.
+Git history keeps them.
+
+| Path | Size | What it was |
+|---|---|---|
+| `.github/readme/demo.mp4` | 7.8 MB | the demo clip; the feature GIFs were cut from it |
+| `.github/readme/demo-poster.jpg` | 132 KB | the clip's poster |
+| `.github/readme/social-preview.png` | 713 KB | the 1280x640 social preview |
+| `assets/logo.png`, `assets/logo.webp` | 224 KB, 7 KB | the old ghost logo |
+| `assets/hero.webp`, `assets/judge.webp`, `assets/star.webp` | 39 KB, 11 KB, 11 KB | the hero, judge and star illustrations |
+| `assets/social-preview.png` | 325 KB | the old social preview |
+
+Restore one with `git checkout <commit>^ -- <path>`, where `<commit>` is the commit that removed it
+(`git log -1 --format=%h --diff-filter=D -- <path>` prints it).
