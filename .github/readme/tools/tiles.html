@@ -1,0 +1,436 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>README tiles</title>
+<style>
+  @font-face { font-family: 'Fraunces'; font-weight: 700; src: url('fonts/fraunces-700.woff2') format('woff2'); }
+  @font-face { font-family: 'Instrument Sans'; font-weight: 400; src: url('fonts/instrument-sans-400.woff2') format('woff2'); }
+  @font-face { font-family: 'Instrument Sans'; font-weight: 600; src: url('fonts/instrument-sans-600.woff2') format('woff2'); }
+  @font-face { font-family: 'JetBrains Mono'; font-weight: 400; src: url('fonts/jetbrains-mono-400.woff2') format('woff2'); }
+  @font-face { font-family: 'JetBrains Mono'; font-weight: 700; src: url('fonts/jetbrains-mono-700.woff2') format('woff2'); }
+
+  html, body { margin: 0; background: transparent; }
+  body[data-theme="dark"]  { --card: #211E3D; --stroke: #363262; --text: #FDFCFB; --muted: #B1A4D6; --accent: #FECE6D; --dot: #4A4578; }
+  body[data-theme="light"] { --card: #FEF7EC; --stroke: #E8DCC5; --text: #363262; --muted: #605B87; --accent: #FECE6D; --dot: #DDD2BD; }
+
+  #canvas { position: relative; overflow: hidden; }
+  .card { position: absolute; box-sizing: border-box; border-radius: 22px; border: 2px solid var(--stroke); background: var(--card); padding: 22px; overflow: hidden; }
+  .title { font: 700 24px/1.12 'Fraunces', serif; color: var(--text); letter-spacing: -0.005em; }
+  .title.big { font-size: 30px; }
+  .line { font: 400 14.5px/1.35 'Instrument Sans', sans-serif; color: var(--muted); margin-top: 6px; }
+  .line.big { font-size: 17px; }
+  .bar { width: 36px; height: 4px; border-radius: 2px; background: var(--accent); margin-top: 12px; }
+  .label { font: 600 13px/1 'Instrument Sans', sans-serif; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+  .chip { display: inline-block; font: 400 13px/1 'JetBrains Mono', monospace; color: var(--text); background: color-mix(in srgb, var(--stroke) 55%, transparent); border: 1px solid var(--stroke); border-radius: 7px; padding: 7px 10px; }
+  .dots { display: flex; gap: 7px; align-items: center; }
+  .dots i { display: block; width: 8px; height: 8px; border-radius: 4px; background: var(--dot); }
+  .dots i.on { background: var(--accent); width: 20px; }
+
+  /* the recreated OpenCode window: a terminal stays dark in both themes */
+  .term { position: relative; background: #1B1834; border-radius: 11px; overflow: hidden; font: 400 12.5px/1.45 'JetBrains Mono', monospace; color: #F1EEFA; box-shadow: inset 0 0 0 1px rgba(177,164,214,.16); }
+  .term.big { font-size: 15px; line-height: 1.5; }
+  .term .tb { height: 22px; background: #15122B; color: #9A92C6; font-size: 11px; text-align: center; line-height: 22px; letter-spacing: 0.02em; }
+  .term.big .tb { height: 28px; line-height: 28px; font-size: 13px; }
+  .term .body { position: absolute; left: 0; right: 0; top: 22px; bottom: 0; padding: 10px 12px; }
+  .term.big .body { top: 28px; padding: 16px 20px; }
+  .term.small { font-size: 12px; line-height: 1.42; }
+  .term.small .user, .term.small .input { padding: 4px 8px; }
+  .term.small .agent { margin-top: 6px; }
+  .term.small .footer { font-size: 11px; }
+  .term.small .toast { font-size: 10.5px; line-height: 1.35; padding: 6px 9px; }
+  .term.small .toast b { margin-bottom: 4px; }
+  .term.small .dialog { font-size: 10.5px; line-height: 1.35; padding: 7px 10px; }
+  .dialog { display: flex; flex-direction: column; }
+  .dialog .txt { flex: 1; overflow: hidden; min-height: 0; }
+  .mono { white-space: pre-wrap; word-break: break-word; }
+  .muted { color: #9A92C6; }
+  .dim { color: #6C659A; }
+  .user { border-left: 3px solid #B1A4D6; background: #2A2552; padding: 6px 10px; border-radius: 0 6px 6px 0; white-space: pre-wrap; word-break: break-word; }
+  .agent { color: #9A92C6; margin-top: 8px; }
+  .agent b { color: #F1EEFA; font-weight: 700; }
+  .cursor { display: inline-block; width: 0.55em; height: 1.05em; background: #B1A4D6; vertical-align: -0.18em; margin-left: 1px; border-radius: 1px; }
+  .input { border-left: 3px solid #B1A4D6; background: #2A2552; padding: 6px 10px; border-radius: 0 6px 6px 0; white-space: pre-wrap; word-break: break-word; min-height: 1.45em; }
+  .footer { display: flex; justify-content: space-between; color: #9A92C6; margin-top: 4px; }
+  .footer b { color: #F1EEFA; font-weight: 700; }
+  .toast { position: absolute; background: #2E2A58; border-left: 3px solid #FECE6D; border-right: 3px solid #FECE6D; padding: 8px 12px; border-radius: 4px; box-shadow: 0 10px 30px rgba(0,0,0,.35); white-space: pre-wrap; word-break: break-word; }
+  .toast.info { border-color: #B1A4D6; }
+  .toast.warn { border-color: #F0A35E; }
+  .toast b { font-weight: 700; display: block; margin-bottom: 6px; }
+  .dialog { position: absolute; background: #3A3570; padding: 10px 14px; border-radius: 6px; box-shadow: 0 14px 40px rgba(0,0,0,.4); white-space: pre-wrap; word-break: break-word; }
+  .dialog .hd { display: flex; justify-content: space-between; }
+  .dialog .hd b { font-weight: 700; }
+  .palette { background: #2A2552; border-left: 3px solid #B1A4D6; padding: 4px 10px; border-radius: 0 6px 6px 0; display: flex; justify-content: space-between; }
+  .draft { position: absolute; width: 86px; background: #FEF7EC; border-radius: 6px; padding: 8px; box-sizing: border-box; color: #363262; font-size: 10.5px; box-shadow: 0 8px 20px rgba(0,0,0,.35); }
+  .draft .l { height: 3px; border-radius: 2px; background: #363262; margin: 6px 0 0; }
+  .draft .n { font-weight: 700; }
+  .star { position: absolute; width: 26px; height: 26px; }
+  .k { color: #B1A4D6; } .s { color: #FECE6D; } .n { color: #FECE6D; } .c { color: #7E77AD; } .p { color: #F1EEFA; }
+  .li { display: flex; align-items: center; gap: 10px; font: 400 15px/1 'JetBrains Mono', monospace; color: var(--text); }
+  .li i { width: 7px; height: 7px; border-radius: 4px; background: var(--accent); flex: none; }
+</style>
+<body data-theme="dark"><div id="canvas"></div>
+<script>
+const q = new URLSearchParams(location.search);
+const TILE = q.get("tile") || "feature-3";
+const THEME = q.get("theme") || "dark";
+document.body.dataset.theme = THEME;
+
+// ---- real strings (hooks.ts, tui.ts, optimizer.ts, prompts/default.md) ----
+const RUSHED = "login is broken after my last change, getting TypeError: Cannot read properties of undefined (reading 'id') in src/auth/session.ts, pls fix";
+const REWRITE = ["Login broke after my last change. The error is:", "", "TypeError: Cannot read properties of undefined (reading 'id')", "", "It points at src/auth/session.ts. Starting from that file and my recent changes, find the cause and fix it so login works again."];
+const OPT = "gpt-5-mini", TARGET = "anthropic/claude-sonnet-4-5", TARGET_NAME = "Claude Sonnet 4.5";
+const AGENT = "Build · " + TARGET_NAME;
+const INFO = ["Prompt optimizer", `Optimizing with ${OPT}…`];
+const INFO3 = ["Prompt optimizer", `Optimizing with ${OPT}… (3 candidates + judge)`];
+const OK_TITLE = "✨ Prompt optimized";
+const WARN = ["Prompt optimizer", "Sent your original prompt — optimizer request timed out after 60000ms"];
+const DLG_TITLE = `Optimized prompt · ${OPT}`;
+const META1 = `for ${TARGET} · 1 turn(s) · 2620ms`;
+const META3 = `for ${TARGET} · 3 turn(s) · candidate 2/3 by judge · 4190ms`;
+const HINT = "↑↓ PgUp PgDn Home End or mouse wheel to scroll";
+const LOGO = `                 ▄
+█▀▀█ █▀▀█ █▀▀█ █▀▀▄ █▀▀▀ █▀▀█ █▀▀█ █▀▀█
+█  █ █  █ █▀▀▀ █  █ █    █  █ █  █ █▀▀▀
+▀▀▀▀ █▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀`;
+
+// ---- helpers ----
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const prog = (t, t0, d) => clamp((t - t0) / d, 0, 1);
+const easeOut = (x) => 1 - Math.pow(1 - x, 3);
+const el = (tag, cls, style, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (style) Object.assign(e.style, style); if (text !== undefined) e.textContent = text; return e; };
+const add = (parent, ...kids) => { for (const k of kids) parent.appendChild(k); return parent; };
+// fade + settle: opacity and a short offset (dx, dy) from t0 over d seconds, ease-out, no overshoot
+function reveal(e, t, t0, d = 0.35, dx = 0, dy = 0, scale = false) {
+  const p = easeOut(prog(t, t0, d));
+  e.style.opacity = p; e.style.visibility = p > 0 ? "visible" : "hidden";
+  e.style.transform = `translate(${(1 - p) * dx}px, ${(1 - p) * dy}px)` + (scale ? ` scale(${0.96 + 0.04 * p})` : "");
+}
+function hide(e) { e.style.opacity = 0; e.style.visibility = "hidden"; }
+// text typed at cps chars/second from t0; returns true when done
+function typed(e, full, t, t0, cps, cur) {
+  const n = clamp(Math.floor((t - t0) * cps), 0, full.length);
+  e.textContent = full.slice(0, n);
+  if (cur) cur.style.visibility = (Math.floor(t * 2) % 2 === 0 || n < full.length) && n >= 0 ? "visible" : "hidden";
+  return n >= full.length;
+}
+function sparkle(fill, size) {
+  const r = size / 2, cx = r, cy = r, k = 0.18;
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", `0 0 ${size} ${size}`); svg.setAttribute("width", size); svg.setAttribute("height", size);
+  const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  p.setAttribute("d", `M${cx} ${cy - r} Q${cx + r * k} ${cy - r * k} ${cx + r} ${cy} Q${cx + r * k} ${cy + r * k} ${cx} ${cy + r} Q${cx - r * k} ${cy + r * k} ${cx - r} ${cy} Q${cx - r * k} ${cy - r * k} ${cx} ${cy - r} Z`);
+  p.setAttribute("fill", fill); svg.appendChild(p); return svg;
+}
+function card(x, y, w, h) { return el("div", "card", { left: x + "px", top: y + "px", width: w + "px", height: h + "px" }); }
+function term(w, h, big, title = "opencode") {
+  const t = el("div", "term" + (big ? " big" : " small"), { width: w + "px", height: h + "px" });
+  const body = el("div", "body");
+  add(t, el("div", "tb", null, title), body);
+  t.body = body; return t;
+}
+const BUSY = '<span style="color:#B1A4D6">■■■■■■⬝⬝</span>  <b>esc</b> interrupt';
+const IDLE = (small) => `<b>Build</b> <span class="dim">·</span> ${TARGET_NAME}` + (small ? "" : ' <span class="dim">Anthropic</span>');
+function footer(busy, small = false) {
+  const f = el("div", "footer");
+  const l = el("span"); const r = el("span");
+  l.innerHTML = busy ? BUSY : IDLE(small);
+  r.innerHTML = small ? '<b>ctrl+p</b> commands' : '<b>tab</b> agents  <b>ctrl+p</b> commands';
+  add(f, l, r); f.l = l; f.r = r; f.small = small; return f;
+}
+function toast(kind, title, lines, pos) {
+  const tt = el("div", "toast " + kind, pos);
+  add(tt, el("b", null, null, title));
+  for (const ln of lines) add(tt, el("div", null, { minHeight: ln === "" ? "0.7em" : "" }, ln));
+  tt.lines = [...tt.querySelectorAll("div")]; return tt;
+}
+function dialog(pos, meta) {
+  const d = el("div", "dialog", pos);
+  const hd = el("div", "hd"); add(hd, el("b", null, null, DLG_TITLE), el("span", "muted", null, "esc"));
+  const txt = el("div", "txt");
+  add(d, hd, el("div", "muted", { margin: "4px 0 8px", flex: "none" }, meta), txt);
+  d.lines = REWRITE.map((ln) => add(txt, el("div", null, { minHeight: ln === "" ? "0.6em" : "" }, ln)).lastChild);
+  add(d, el("div", "muted", { marginTop: "8px", flex: "none" }, HINT));
+  return d;
+}
+function draft(n, x, y, rot) {
+  const d = el("div", "draft", { left: x + "px", top: y + "px", transform: `rotate(${rot}deg)` });
+  add(d, el("div", "n", null, "candidate " + n));
+  const widths = [[88, 70, 92, 60, 84], [82, 94, 70, 90, 76], [90, 64, 86, 80, 58]][n - 1];
+  for (const w of widths) add(d, el("div", "l", { width: w + "%" }));
+  d.rot = rot; return d;
+}
+function featureText(parent, title, line) {
+  add(parent, el("div", "title", null, title), el("div", "line", null, line), el("div", "bar"));
+}
+
+// ---- scenes: each returns update(t); loop length in seconds is set per tile ----
+const scenes = {};
+
+// Feature 1: the rushed note typed, sent, rewritten (toast)
+scenes.f1 = (parent, w, h, big = false) => {
+  const T = term(w, h, big); add(parent, T);
+  const wrap = el("div"); add(T.body, wrap);
+  const user = el("div", "user"); const cur = el("span", "cursor"); add(user, el("span"), cur); user.firstChild.className = "mono";
+  const agent = el("div", "agent"); agent.innerHTML = `▣  <b>Build</b> · ${TARGET_NAME}`;
+  const inp = el("div", "input", { position: "absolute", left: big ? "20px" : "12px", right: big ? "20px" : "12px", bottom: big ? "46px" : "26px" });
+  const icur = el("span", "cursor"); add(inp, el("span", "mono"), icur);
+  const ft = footer(false, !big); Object.assign(ft.style, { position: "absolute", left: big ? "20px" : "12px", right: big ? "20px" : "12px", bottom: big ? "14px" : "5px" });
+  add(wrap, user, agent, inp, ft);
+  const ti = toast("info", INFO[0], [INFO[1]], { right: big ? "20px" : "10px", top: big ? "70px" : "40px", width: big ? "300px" : "190px" });
+  const ok = toast("ok", OK_TITLE, [...REWRITE, "", "/optimized to view full"], { right: big ? "20px" : "8px", top: big ? "70px" : "6px", width: big ? "440px" : "262px" });
+  add(T.body, ti, ok);
+  return (t, D) => {
+    // 0.2-2.5 typed into the input; 2.75 the message lands; 3.05 info toast; 4.7 success toast
+    typed(inp.firstChild, RUSHED, t, 0.2, 62, icur);
+    const sent = t >= 2.75;
+    if (sent) { inp.firstChild.textContent = ""; icur.style.visibility = Math.floor(t * 2) % 2 === 0 ? "visible" : "hidden"; }
+    user.firstChild.textContent = RUSHED; cur.style.display = "none";
+    reveal(user, t, 2.75, 0.3, 0, 6); reveal(agent, t, 2.95, 0.3, 0, 4);
+    ft.l.innerHTML = sent ? BUSY : IDLE(ft.small);
+    if (t < 2.75) { hide(user); hide(agent); }
+    reveal(ti, t, 3.05, 0.35, 14, 0); if (t >= 4.7) hide(ti);
+    reveal(ok, t, 4.7, 0.4, 14, 0);
+    ok.lines.forEach((ln, i) => reveal(ln, t, 4.85 + i * 0.12, 0.3, 0, 4));
+    const fade = 1 - prog(t, D - 0.45, 0.45);
+    wrap.style.opacity = fade; ok.style.opacity = Math.min(+ok.style.opacity, fade); ti.style.opacity = Math.min(+ti.style.opacity, fade);
+  };
+};
+
+// Feature 2: the chat keeps the original; /optimized opens the rewrite
+scenes.f2 = (parent, w, h, big = false) => {
+  const T = term(w, h, big); add(parent, T);
+  const wrap = el("div"); add(T.body, wrap);
+  const user = el("div", "user mono", null, RUSHED);
+  const agent = el("div", "agent"); agent.innerHTML = `▣  <b>Build</b> · ${TARGET_NAME}`;
+  const pal = el("div", "palette", { position: "absolute", left: big ? "20px" : "12px", right: big ? "20px" : "12px", bottom: big ? "80px" : "54px" });
+  add(pal, el("span", null, null, "/optimized"), el("span", "muted", null, "Show optimized prompt"));
+  const inp = el("div", "input", { position: "absolute", left: big ? "20px" : "12px", right: big ? "20px" : "12px", bottom: big ? "46px" : "26px" });
+  const icur = el("span", "cursor"); add(inp, el("span", "mono"), icur);
+  const ft = footer(false, !big); Object.assign(ft.style, { position: "absolute", left: big ? "20px" : "12px", right: big ? "20px" : "12px", bottom: big ? "14px" : "5px" });
+  add(wrap, user, agent, pal, inp, ft);
+  const dlg = dialog({ left: big ? "40px" : "14px", right: big ? "40px" : "14px", top: big ? "120px" : "50px", bottom: big ? "" : "6px" }, META1);
+  add(T.body, dlg);
+  return (t, D) => {
+    const done = typed(inp.firstChild, "/optimized", t, 0.8, 18, icur);
+    reveal(pal, t, 0.9, 0.25, 0, 4); if (t >= 2.3) hide(pal);
+    if (t >= 2.3) { inp.firstChild.textContent = ""; }
+    reveal(dlg, t, 2.35, 0.4, 0, 8, true);
+    dlg.lines.forEach((ln, i) => reveal(ln, t, 2.55 + i * 0.1, 0.3, 0, 4));
+    user.style.color = agent.style.color = t >= 2.35 ? "#8F89B8" : "";
+    wrap.style.opacity = dlg.style.opacity = Math.min(+dlg.style.opacity || 0, 1) ; // keep
+    const fade = 1 - prog(t, D - 0.45, 0.45);
+    wrap.style.opacity = fade; dlg.style.opacity = Math.min(easeOut(prog(t, 2.35, 0.4)), fade);
+  };
+};
+
+// Feature 3: three drafts, one judge
+scenes.f3 = (parent, w, h) => {
+  const T = term(w, h, false); add(parent, T);
+  const ti = toast("info", INFO3[0], [INFO3[1]], { left: "12px", right: "12px", top: "10px" });
+  const d1 = draft(1, 16, 14, -4), d2 = draft(2, 123, 8, 1.5), d3 = draft(3, 230, 16, 4);
+  const star = add(el("div", "star", { left: "192px", top: "2px" }), sparkle("#FECE6D", 26));
+  const meta = el("div", "dialog", { left: "10px", right: "10px", bottom: "8px", padding: "6px 10px", fontSize: "10.5px", lineHeight: "1.4" });
+  add(meta, el("b", null, null, DLG_TITLE), el("div", "muted", null, META3));
+  add(T.body, ti, d1, d2, d3, star, meta);
+  return (t, D) => {
+    reveal(ti, t, 0.3, 0.35, 0, -6); if (t >= 1.9) ti.style.opacity = Math.min(+ti.style.opacity, 1 - prog(t, 1.9, 0.3));
+    [d1, d2, d3].forEach((d, i) => { const p = easeOut(prog(t, 1.9 + i * 0.4, 0.5)); d.style.opacity = p; d.style.transform = `translateY(${(1 - p) * 18}px) rotate(${d.rot}deg)`; });
+    const judged = prog(t, 3.9, 0.45);
+    d1.style.opacity = d3.style.opacity = Math.min(+d1.style.opacity, 1 - 0.55 * easeOut(judged));
+    const sp = easeOut(prog(t, 3.9, 0.4)); star.style.opacity = sp; star.style.transform = `translateY(${(1 - sp) * -10}px) scale(${0.8 + 0.2 * sp})`;
+    reveal(meta, t, 4.5, 0.35, 0, 4);
+    const fade = 1 - prog(t, D - 0.45, 0.45);
+    for (const e of [ti, d1, d2, d3, star, meta]) e.style.opacity = Math.min(+e.style.opacity, fade);
+  };
+};
+
+// Feature 4: prompts chosen by target model
+scenes.f4 = (parent, w, h) => {
+  const T = term(w, h, false, "prompts/"); add(parent, T);
+  const rows = [
+    ["target model", "prompt", true],
+    ["anthropic/claude-sonnet-4-5", "anthropic.md"],
+    ["openai/gpt-5", "gpt.md"],
+    ["google/gemini-2.5-pro", "gemini.md"],
+    ["anything else", "default.md"],
+  ];
+  const lines = rows.map((r) => {
+    const d = el("div", "mono", { display: "grid", gridTemplateColumns: "1fr 92px", gap: "8px", padding: "2px 0 3px", fontSize: "11.5px" });
+    const [a, b, head] = r;
+    add(d, el("span", head ? "muted" : "", null, a), el("span", head ? "muted" : "s", null, b));
+    if (head) d.style.borderBottom = "1px solid #3A3570";
+    add(T.body, d); return d;
+  });
+  const note = el("div", "mono muted", { marginTop: "8px", fontSize: "10.5px" });
+  note.innerHTML = 'matched by glob: <span class="s">*claude*</span> <span class="s">*gpt*</span> <span class="s">*gemini*</span>, first match wins';
+  add(T.body, note);
+  return (t, D) => {
+    lines.forEach((ln, i) => reveal(ln, t, 0.3 + i * 0.5, 0.35, -8, 0));
+    reveal(note, t, 3.2, 0.35, 0, 4);
+    const fade = 1 - prog(t, D - 0.45, 0.45);
+    for (const e of [...lines, note]) e.style.opacity = Math.min(+e.style.opacity, fade);
+  };
+};
+
+// Feature 5: a failed rewrite sends the original
+scenes.f5 = (parent, w, h) => {
+  const T = term(w, h, false); add(parent, T);
+  const wrap = el("div"); add(T.body, wrap);
+  const user = el("div", "user mono", null, RUSHED);
+  const agent = el("div", "agent"); agent.innerHTML = `▣  <b>Build</b> · ${TARGET_NAME}`;
+  const inp = el("div", "input", { position: "absolute", left: "12px", right: "12px", bottom: "26px" }); add(inp, el("span", "mono"), el("span", "cursor"));
+  const ft = footer(false, true); Object.assign(ft.style, { position: "absolute", left: "12px", right: "12px", bottom: "5px" });
+  add(wrap, user, agent, inp, ft);
+  const ti = toast("info", INFO[0], [INFO[1]], { right: "10px", top: "40px", width: "190px" });
+  const wt = toast("warn", WARN[0], [WARN[1]], { right: "10px", top: "40px", width: "224px" });
+  add(T.body, ti, wt);
+  return (t, D) => {
+    reveal(user, t, 0.2, 0.3, 0, 6); reveal(agent, t, 3.3, 0.3, 0, 4);
+    inp.lastChild.style.visibility = Math.floor(t * 2) % 2 === 0 ? "visible" : "hidden";
+    reveal(ti, t, 0.6, 0.35, 14, 0); if (t >= 2.9) hide(ti);
+    reveal(wt, t, 2.9, 0.4, 14, 0);
+    ft.l.innerHTML = t >= 3.3 ? BUSY : IDLE(true);
+    const fade = 1 - prog(t, D - 0.45, 0.45);
+    wrap.style.opacity = fade; wt.style.opacity = Math.min(+wt.style.opacity, fade);
+  };
+};
+
+// Code tile: the config file typed live
+scenes.code = (parent, w, h) => {
+  const T = term(w, h, false, "~/.config/opencode/prompt-optimizer.jsonc"); add(parent, T);
+  T.style.fontSize = "15px"; T.style.lineHeight = "1.5";
+  const src = [
+    [["c", "// every key is optional; re-read on every message"]],
+    [["p", "{"]],
+    [["p", "  "], ["k", '"model"'], ["p", ": "], ["s", '"openai/gpt-5-mini"'], ["p", ","]],
+    [["p", "  "], ["k", '"turns"'], ["p", ": "], ["n", "3"], ["p", ","]],
+    [["p", "  "], ["k", '"strategy"'], ["p", ": "], ["s", '"parallel"']],
+    [["p", "}"]],
+  ];
+  const flat = src.map((spans) => spans.map((s) => s[1]).join(""));
+  const total = flat.reduce((a, s) => a + s.length + 1, 0);
+  const rows = src.map(() => add(el("div", "mono", { minHeight: "1.45em" })));
+  rows.forEach((r) => add(T.body, r));
+  const cur = el("span", "cursor");
+  const render = (n) => {
+    let left = n;
+    rows.forEach((row, i) => {
+      row.innerHTML = "";
+      for (const [cls, txt] of src[i]) {
+        if (left <= 0) break;
+        const take = txt.slice(0, left); left -= take.length;
+        add(row, el("span", cls, null, take));
+      }
+      if (left >= 0 && left < 1 && n < total && row.textContent.length === flat[i].length && i < rows.length) {}
+      left -= 1; // newline
+    });
+    // cursor after the last typed char
+    const idx = Math.min(rows.length - 1, Math.max(0, (() => { let acc = 0; for (let i = 0; i < flat.length; i++) { acc += flat[i].length + 1; if (n < acc) return i; } return flat.length - 1; })()));
+    add(rows[idx], cur);
+  };
+  return (t, D) => {
+    const n = clamp(Math.floor((t - 0.4) * 34), 0, total);
+    render(n);
+    cur.style.visibility = n < total || Math.floor(t * 2) % 2 === 0 ? "visible" : "hidden";
+    const fade = 1 - prog(t, D - 0.45, 0.45);
+    rows.forEach((r) => (r.style.opacity = fade));
+  };
+};
+
+// List tile: what the optimizer can talk to
+scenes.list = (parent, w, h) => {
+  const items = ["OpenAI", "Anthropic", "Google", "OpenRouter", "Groq", "Mistral", "DeepSeek", "xAI", "any OpenAI-compatible /v1"];
+  const box = el("div", null, { display: "flex", flexDirection: "column", gap: "13px", marginTop: "18px" });
+  const rows = items.map((s) => add(el("div", "li"), el("i"), el("span", null, null, s)));
+  rows.forEach((r) => add(box, r)); add(parent, box);
+  return (t, D) => {
+    rows.forEach((r, i) => reveal(r, t, 0.4 + i * 0.3, 0.3, -8, 0));
+    const fade = 1 - prog(t, D - 0.45, 0.45);
+    rows.forEach((r) => (r.style.opacity = Math.min(+r.style.opacity, fade)));
+  };
+};
+
+// Preview card: a walk through the plugin's screens
+scenes.preview = (parent, w, h) => {
+  const T = term(w, h, true); add(parent, T);
+  const B = T.body;
+  const layers = [0, 1, 2, 3].map(() => el("div", null, { position: "absolute", inset: "0", padding: "16px 20px" }));
+  layers.forEach((l) => add(B, l));
+  // screen 1: new session, the message typed and sent
+  const logo = el("div", "mono muted", { textAlign: "center", margin: "40px 0 0", fontSize: "13px", lineHeight: "1.25", whiteSpace: "pre" }, LOGO);
+  const inp1 = el("div", "input", { position: "absolute", left: "20px", right: "20px", bottom: "46px" }); const c1 = el("span", "cursor"); add(inp1, el("span", "mono"), c1);
+  const ft1 = footer(false); Object.assign(ft1.style, { position: "absolute", left: "20px", right: "20px", bottom: "14px" });
+  const user1 = el("div", "user mono", null, RUSHED); const agent1 = el("div", "agent"); agent1.innerHTML = `▣  <b>Build</b> · ${TARGET_NAME}`;
+  const ti1 = toast("info", INFO[0], [INFO[1]], { right: "20px", top: "110px", width: "300px" });
+  add(layers[0], logo, user1, agent1, inp1, ft1, ti1);
+  // screen 2: the success toast
+  const user2 = el("div", "user mono", null, RUSHED); const agent2 = el("div", "agent"); agent2.innerHTML = `▣  <b>Build</b> · ${TARGET_NAME}`;
+  const inp2 = el("div", "input", { position: "absolute", left: "20px", right: "20px", bottom: "46px" }); add(inp2, el("span", "mono"), el("span", "cursor"));
+  const ft2 = footer(true); Object.assign(ft2.style, { position: "absolute", left: "20px", right: "20px", bottom: "14px" });
+  const ok2 = toast("ok", OK_TITLE, [...REWRITE, "", "/optimized to view full"], { right: "20px", top: "100px", width: "440px" });
+  add(layers[1], user2, agent2, inp2, ft2, ok2);
+  // screen 3: /optimized
+  const user3 = el("div", "user mono", null, RUSHED); const agent3 = el("div", "agent"); agent3.innerHTML = `▣  <b>Build</b> · ${TARGET_NAME}`;
+  user3.style.color = agent3.style.color = "#8F89B8";
+  const inp3 = el("div", "input", { position: "absolute", left: "20px", right: "20px", bottom: "46px" }); add(inp3, el("span", "mono"), el("span", "cursor"));
+  const ft3 = footer(false); Object.assign(ft3.style, { position: "absolute", left: "20px", right: "20px", bottom: "14px" });
+  const dlg3 = dialog({ left: "44px", right: "44px", top: "150px" }, META1);
+  add(layers[2], user3, agent3, inp3, ft3, dlg3);
+  // screen 4: the config file
+  const cfgTitle = el("div", "muted", { marginBottom: "10px" }, "~/.config/opencode/prompt-optimizer.jsonc");
+  const cfgLines = [
+    [["c", "// every key is optional; edits apply without a restart"]], [["p", "{"]],
+    [["p", "  "], ["k", '"model"'], ["p", ": "], ["s", '"openai/gpt-5-mini"'], ["p", ","]],
+    [["p", "  "], ["k", '"turns"'], ["p", ": "], ["n", "3"], ["p", ","]],
+    [["p", "  "], ["k", '"strategy"'], ["p", ": "], ["s", '"parallel"'], ["p", ","]],
+    [["p", "  "], ["k", '"minChars"'], ["p", ": "], ["n", "20"]],
+    [["p", "}"]],
+  ].map((spans) => { const d = el("div", "mono"); for (const [c, s] of spans) add(d, el("span", c, null, s)); return d; });
+  const note4 = el("div", "muted", { position: "absolute", left: "20px", right: "20px", bottom: "20px" }, "The same keys work as plugin options in opencode.json; the file wins.");
+  add(layers[3], cfgTitle, ...cfgLines, note4);
+  // label + dots under the window
+  const row = el("div", null, { position: "absolute", left: "22px", right: "22px", bottom: "22px", display: "flex", justifyContent: "space-between", alignItems: "center" });
+  const chip = el("div", "chip"); const dots = el("div", "dots"); const dotEls = [0, 1, 2, 3].map(() => add(dots, el("i")).lastChild);
+  add(row, chip, dots); add(parent, row);
+  const names = ["new session", "toast: Prompt optimized", "/optimized", "~/.config/opencode/prompt-optimizer.jsonc"];
+  const SEG = 4.5, X = 0.5;
+  return (t, D) => {
+    const i = clamp(Math.floor(t / SEG), 0, 3); const lt = t - i * SEG;
+    layers.forEach((l, j) => { l.style.opacity = j === i ? easeOut(prog(lt, 0, X)) * (1 - prog(lt, SEG - X, X)) : 0; l.style.visibility = j === i ? "visible" : "hidden"; });
+    chip.textContent = names[i]; dotEls.forEach((d, j) => d.classList.toggle("on", j === i));
+    if (i === 0) {
+      typed(inp1.firstChild, RUSHED, lt, 0.5, 70, c1);
+      const sent = lt >= 2.95; if (sent) { inp1.firstChild.textContent = ""; }
+      reveal(user1, lt, 2.95, 0.3, 0, 6); reveal(agent1, lt, 3.1, 0.3, 0, 4); logo.style.opacity = 1 - easeOut(prog(lt, 2.95, 0.3));
+      reveal(ti1, lt, 3.3, 0.35, 14, 0);
+    }
+    if (i === 1) { reveal(ok2, lt, 0.4, 0.4, 14, 0); ok2.lines.forEach((ln, j) => reveal(ln, lt, 0.55 + j * 0.12, 0.3, 0, 4)); }
+    if (i === 2) { typed(inp3.firstChild, "", lt, 0, 1); reveal(dlg3, lt, 0.5, 0.4, 0, 8, true); dlg3.lines.forEach((ln, j) => reveal(ln, lt, 0.7 + j * 0.1, 0.3, 0, 4)); }
+    if (i === 3) { cfgLines.forEach((ln, j) => reveal(ln, lt, 0.4 + j * 0.25, 0.3, -8, 0)); reveal(note4, lt, 2.4, 0.35, 0, 4); }
+  };
+};
+
+// ---- tile layouts: canvas size, cards, scenes; a transparent half-gutter (12 px) on every side ----
+const G = 12;
+const tiles = {
+  "feature-3": { w: 400, h: 400, build(c) { const k = card(G, G, 376, 376); add(c, k); const u = scenes.f3(k, 332, 184); featureText(k, "Several drafts compete, one judge picks", "Set turns up to 8; one more call keeps the best"); return [u]; }, D: 8 },
+  "feature-4": { w: 400, h: 400, build(c) { const k = card(G, G, 376, 376); add(c, k); const u = scenes.f4(k, 332, 184); featureText(k, "Prompts tuned for your target model", "Built in for Claude, GPT and Gemini, or your own"); return [u]; }, D: 8 },
+  "feature-5": { w: 400, h: 400, build(c) { const k = card(G, G, 376, 376); add(c, k); const u = scenes.f5(k, 332, 184); featureText(k, "A failed rewrite never blocks you", "Your original goes through and a toast says why"); return [u]; }, D: 8 },
+  "stack-1-2": { w: 400, h: 800, build(c) {
+    const k1 = card(G, G, 376, 376), k2 = card(G, 412, 376, 376); add(c, k1, k2);
+    const u1 = scenes.f1(k1, 332, 184); featureText(k1, "Rushed notes arrive as clear requests", "A small model rewrites each message first");
+    const u2 = scenes.f2(k2, 332, 184); featureText(k2, "Your chat keeps your words", "History, fork, copy and revert use what you typed");
+    return [u1, (t, D) => u2((t + 4) % D, D)]; }, D: 9 },
+  "code": { w: 800, h: 400, build(c) { const k = card(G, G, 776, 376); add(c, k); const u = scenes.code(k, 732, 190); featureText(k, "One file, re-read on every message", "Three keys for three drafts and a judge; every key is optional, and edits apply without a restart"); return [u]; }, D: 8 },
+  "list": { w: 400, h: 400, build(c) { const k = card(G, G, 376, 376); add(c, k); add(k, el("div", "title", null, "Works with")); const u = scenes.list(k); return [u]; }, D: 8 },
+  "preview": { w: 800, h: 800, build(c) { const k = card(G, G, 776, 776); add(c, k); const u = scenes.preview(k, 732, 650); return [u]; }, D: 18 },
+};
+
+const spec = tiles[TILE];
+const canvas = document.getElementById("canvas");
+canvas.style.width = spec.w + "px"; canvas.style.height = spec.h + "px";
+const updaters = spec.build(canvas);
+window.TILE_INFO = { w: spec.w, h: spec.h, D: spec.D };
+window.setTime = (t) => { for (const u of updaters) u(t, spec.D); };
+window.setTime(0);
+</script>
+</body>
