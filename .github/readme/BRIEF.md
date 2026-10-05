@@ -153,3 +153,41 @@ Git history keeps them.
 
 Restore one with `git checkout <commit>^ -- <path>`, where `<commit>` is the commit that removed it
 (`git log -1 --format=%h --diff-filter=D -- <path>` prints it).
+
+## Launch page + bento run (2026-10-05)
+
+The README moved to the readme-enhancer's proposal 6 layout (launch page + bento grid). The banners and the clip are
+unchanged, so the rounds above still hold. Every new asset is drawn from the project's own material in the locked
+palette and typefaces; no image model was involved (preflight: higgsfield-api and brag unavailable, chromium only
+through Playwright). The generators live in [tools/](tools/) and reproduce every file below.
+
+- **Typefaces:** Fraunces 700, Instrument Sans 400 and 600, JetBrains Mono 400 and 700 (OFL-1.1), from the Fontsource
+  packages on the npm registry (jsdelivr was blocked). Each SVG embeds a per-file subset made with fontTools, 2-9 KB.
+- **Card surfaces:** dark `#211E3D` with stroke `#363262`, text `#FDFCFB`, muted `#B1A4D6`; light cream `#FEF7EC` with
+  stroke `#E8DCC5`, ink `#363262`, muted `#605B87` (5.5:1 on cream). Gold `#FECE6D` is the only accent: the small bar,
+  the sparkle, the filled CTA. The recreated OpenCode window stays dark in both themes (`#1B1834`, title bar `#15122B`,
+  user block `#2A2552`, toast `#2E2A58`, dialog `#3A3570`), as it does in the clip.
+- **Sparkle:** the four-point star of the success toast is the center mark of the rule and the outro.
+- **Strings:** every line in the tiles is the plugin's own output: toasts from src/hooks.ts, the dialog title, metadata
+  line and key hint from src/tui.ts, the timeout error from src/optimizer.ts, the rewrite from the example in
+  prompts/default.md, the config keys from examples/prompt-optimizer.jsonc. Layouts follow a tmux capture of the real
+  OpenCode 1.18.34 TUI with the plugin loaded and a mock model (150x45 and 84x30). Model names are the clip's
+  illustrative ones: gpt-5-mini as the optimizer, Claude Sonnet 4.5 as the target.
+
+| Asset | Facts behind it | Rounds (every frame sheet viewed at display size) |
+|---|---|---|
+| `cta-start`, `cta-demo` | | 1: gold fill with navy text; outline lavender on dark, navy on light. Accepted |
+| `rule` | | 1: accepted |
+| `spec-1..8` | `opencode plugin "$PWD" -g` run this session; e2e 14/14 on OpenCode 1.18.34 and Bun 1.3.14; `KNOWN` in src/optimizer.ts; `turns` 1..8 and the per-message re-read in src/config.ts and src/hooks.ts; no `dependencies` in package.json; dist + prompts = 57,059 bytes after `bun run build`; LICENSE | 1: accepted (values measured from the font metrics and shrunk to fit; `CONFIG FILE` mixes the mono file name with a display line) |
+| `contribute` | `git shortlog -sne`: one author plus renovate[bot] | 1: accepted |
+| `outro` | the install line | 1: accepted |
+| `tile-feature-3` (drafts and judge) | | 1: the metadata line collided with the cards. 2: cards moved up with five lines each, metadata as a two-line strip in the dialog color. Accepted |
+| `tile-stack-1-2`, `tile-feature-4`, `tile-feature-5` | | 1: the success toast and the dialog ran past the window bottom, the footer wrapped to two lines, the prompts table's note sat on its last row. 2: small-window styles (12 px face, two-item footer), the dialog pinned to the window with a clipped text area like the real capped scrollbox, a two-column prompts table with the globs in a note below. Accepted |
+| `tile-code`, `tile-list` | | 1: the windows sat half empty at 13.5 and 14 px. 2: 15 px. Accepted |
+| `tile-preview` | | 1: four screens of 4.5 s (new session with the typed message and the info toast; the success toast; `/optimized`; the config file), a label chip and four dots. Accepted |
+
+Encoding: 10 fps, Playwright screenshots of `tools/tiles.html` at integer frame times, ffmpeg `libwebp_anim` lossy
+q 85 with alpha (bgra), a 12 px transparent half-gutter on every side. Sizes: preview 548/561 KB, stack 244/245 KB,
+features 59-100 KB, code 46 KB, list 46-49 KB (dark/light). Slop score 0 on every tile: real UI, palette-exact, no
+composition tell. `feature-1.gif`, `feature-2.gif` and `feature-3.gif` were removed (the grid takes WebP only; git
+history keeps them, see [Removed files](#removed-files)).

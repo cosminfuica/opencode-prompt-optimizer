@@ -15,7 +15,7 @@ opencode-prompt-optimizer/
 ├── tests/             # bun unit tests + standalone e2e/TUI scripts; see tests/AGENTS.md
 ├── docs/design.md     # module contracts (the spec); README sends contributors here
 ├── examples/          # opencode.json, tui.json, prompt-optimizer.jsonc; parsed by tests/config.test.ts
-└── .github/readme/    # README media + BRIEF.md art direction; not shipped
+└── .github/readme/    # README media + BRIEF.md art direction + tools/ (asset generators); not shipped
 ```
 
 ## WHERE TO LOOK
@@ -86,4 +86,4 @@ opencode plugin "$PWD" -g   # install this checkout (server + tui entries)
 - Order in the opencode.json `plugin` array matters relative to other text-injecting plugins (docs/design.md:118-123).
 - The session-title request skips the transform hook: the title model sees original + rewrite (known limit).
 - Logs: `grep prompt-optimizer ~/.local/share/opencode/log/*.log`.
-- Doc drift: design.md:14 says N rewrites run in parallel (`refine` exists too); design.md:127 `$CFG` = `${XDG_CONFIG_HOME:-~/.config}/opencode`; "tested with" opencode differs (design.md 1.18.32, README 1.18.33, devDeps 1.18.34).
+- Doc drift: design.md:14 says N rewrites run in parallel (`refine` exists too); design.md:127 `$CFG` = `${XDG_CONFIG_HOME:-~/.config}/opencode`; "tested with" opencode differs (design.md 1.18.32, README and devDeps 1.18.34).
