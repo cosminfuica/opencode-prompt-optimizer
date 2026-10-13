@@ -59,7 +59,7 @@
   "devDependencies": {
     "@opencode-ai/plugin": "1.19.0",
     "@opencode-ai/sdk": "1.19.0",
-    "@opentui/core": "0.6.1",
+    "@opentui/core": "0.6.2",
     "@opentui/keymap": "0.6.1",
     "@types/bun": "1.4.3",
     "typescript": "7.0.2"
