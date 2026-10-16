@@ -57,7 +57,7 @@
     }
   },
   "devDependencies": {
-    "@opencode-ai/plugin": "1.19.2",
+    "@opencode-ai/plugin": "1.19.3",
     "@opencode-ai/sdk": "1.19.2",
     "@opentui/core": "0.6.6",
     "@opentui/keymap": "0.6.6",
