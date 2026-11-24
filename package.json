@@ -60,7 +60,7 @@
     "@opencode-ai/plugin": "1.19.6",
     "@opencode-ai/sdk": "1.19.6",
     "@opentui/core": "0.9.9",
-    "@opentui/keymap": "0.9.7",
+    "@opentui/keymap": "0.9.9",
     "@types/bun": "1.4.5",
     "typescript": "7.0.2"
   },
